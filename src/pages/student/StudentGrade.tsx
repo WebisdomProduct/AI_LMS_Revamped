@@ -50,38 +50,53 @@ const StudentGrade: React.FC = () => {
         const loadGradeData = async () => {
             if (!user) return;
             try {
-                const { data: student } = await dbService.getStudentByUserId(user.id);
-                if (student) {
-                    const { data: studentGrades } = await dbService.getStudentGrades(student.id);
-                    const { data: assessments } = await dbService.getAvailableAssessments(student.grade);
-                    const allGrades = await dbService.getAllGrades(); // For class average
+                console.log("Fetching grade data for user:", user.id);
+                // 1. Get Student Profile
+                const studentRes = await fetch(`/api/students/user/${user.id}`);
+                const studentData = await studentRes.json();
+                const student = studentData.data;
 
-                    // Combine grade info with assessment titles
-                    const enrichedGrades = studentGrades?.map(g => {
-                        const ass = assessments?.find(a => a.id === g.assessment_id);
+                if (student) {
+                    console.log("Found student profile:", student.id);
+                    // 2. Get Grades
+                    const gradesRes = await fetch(`/api/students/${student.id}/grades`);
+                    const gradesData = await gradesRes.json();
+                    const studentGrades = gradesData.data || [];
+                    console.log("Fetched grades:", studentGrades.length);
+
+                    // 3. Get Assessments (to link titles)
+                    const assessRes = await fetch(`/api/published-assessments`);
+                    const assessData = await assessRes.json();
+                    const assessments = assessData.data || [];
+
+                    // 4. Combine
+                    const enrichedGrades = studentGrades.map((g: any) => {
+                        const ass = assessments.find((a: any) => a.id === g.assessment_id);
                         return {
                             ...g,
                             assessment_title: ass?.title || 'Unknown Assessment',
                             subject: ass?.subject || 'N/A'
                         };
-                    }) || [];
+                    });
 
                     setGrades(enrichedGrades);
 
-                    // Calculate stats
+                    // 5. Calculate stats
                     const avg = enrichedGrades.length > 0
-                        ? Math.round(enrichedGrades.reduce((sum, g) => sum + g.percentage, 0) / enrichedGrades.length)
+                        ? Math.round(enrichedGrades.reduce((sum: number, g: any) => sum + g.percentage, 0) / enrichedGrades.length)
                         : 0;
 
                     setStats({
                         average: avg,
-                        highest: enrichedGrades.length > 0 ? Math.max(...enrichedGrades.map(g => g.percentage)) : 0,
+                        highest: enrichedGrades.length > 0 ? Math.max(...enrichedGrades.map((g: any) => g.percentage)) : 0,
                         totalTaken: enrichedGrades.length,
-                        performanceData: enrichedGrades.map(g => ({
+                        performanceData: enrichedGrades.map((g: any) => ({
                             name: new Date(g.graded_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
                             score: g.percentage
                         })).reverse()
                     });
+                } else {
+                    console.warn("No student profile found for user:", user.id);
                 }
             } catch (error) {
                 console.error("Error loading grade data:", error);
@@ -105,6 +120,52 @@ const StudentGrade: React.FC = () => {
             </div>
         );
     }
+
+    const handleDownload = () => {
+        import('jspdf').then(({ default: jsPDF }) => {
+            const doc = new jsPDF();
+
+            // Header
+            doc.setFontSize(20);
+            doc.text("Student Grade Report", 20, 20);
+
+            doc.setFontSize(12);
+            doc.text(`Student Name: ${user?.fullName || 'Student'}`, 20, 30);
+            doc.text(`Date: ${new Date().toLocaleDateString()}`, 20, 40);
+            doc.text(`Average Score: ${stats?.average || 0}%`, 20, 50);
+
+            // Table Header
+            let y = 70;
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "bold");
+            doc.text("Assessment", 20, y);
+            doc.text("Subject", 80, y);
+            doc.text("Date", 120, y);
+            doc.text("Score", 160, y);
+            doc.text("Grade", 180, y);
+
+            doc.line(20, y + 2, 190, y + 2);
+            y += 10;
+
+            // Table Rows
+            doc.setFont("helvetica", "normal");
+            filteredGrades.forEach((g) => {
+                const title = g.assessment_title.length > 30 ? g.assessment_title.substring(0, 30) + '...' : g.assessment_title;
+                doc.text(title, 20, y);
+                doc.text(g.subject, 80, y);
+                doc.text(new Date(g.graded_at).toLocaleDateString(), 120, y);
+                doc.text(`${g.percentage}%`, 160, y);
+                doc.text(g.grade_letter, 180, y);
+                y += 10;
+            });
+
+            // Footer
+            doc.setFontSize(8);
+            doc.text("Generated by EduSpark AI LMS", 20, 280);
+
+            doc.save("grade_report.pdf");
+        });
+    };
 
     return (
         <div className="space-y-8 animate-in fade-in duration-700">
@@ -224,7 +285,7 @@ const StudentGrade: React.FC = () => {
                         })}
 
                         <div className="pt-6">
-                            <Button variant="outline" className="w-full border-dashed" onClick={() => navigate('/student/tutor')}>
+                            <Button variant="outline" className="w-full border-dashed" onClick={() => navigate('/student/study-plan')}>
                                 Get Study Recommendations
                             </Button>
                         </div>
@@ -247,7 +308,7 @@ const StudentGrade: React.FC = () => {
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                 />
                             </div>
-                            <Button variant="outline" size="icon">
+                            <Button variant="outline" size="icon" onClick={handleDownload}>
                                 <Download className="h-4 w-4" />
                             </Button>
                         </div>
@@ -290,7 +351,12 @@ const StudentGrade: React.FC = () => {
                                             </Badge>
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity text-student">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="opacity-0 group-hover:opacity-100 transition-opacity text-student"
+                                                onClick={() => navigate(`/student/assignments/${grade.assessment_id}`)}
+                                            >
                                                 Review <ArrowUpRight className="ml-1 h-3 w-3" />
                                             </Button>
                                         </TableCell>

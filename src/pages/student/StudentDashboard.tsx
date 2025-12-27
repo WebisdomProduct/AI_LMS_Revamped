@@ -32,19 +32,24 @@ const StudentDashboard: React.FC = () => {
 
             try {
                 // Get student profile
-                const { data: student } = await dbService.getStudentByUserId(user.id);
+                const studentRes = await fetch(`/api/students/user/${user.id}`);
+                const { data: student } = await studentRes.json();
+
                 if (student) {
                     // Get stats
-                    const analytics = await dbService.getStudentAnalytics(student.id);
+                    const statsRes = await fetch(`/api/students/${student.id}/stats`);
+                    const analytics = await statsRes.json();
                     setStats(analytics);
 
                     // Get available assessments
-                    const { data: assessments } = await dbService.getAvailableAssessments(student.grade);
+                    const assessRes = await fetch(`/api/published-assessments`); // In real app, pass params
+                    const { data: assessments } = await assessRes.json();
                     setUpcomingAssessments(assessments?.slice(0, 3) || []);
 
                     // Get recent grades
-                    const { data: grades } = await dbService.getStudentGrades(student.id);
-                    setRecentGrades(grades?.slice(-3).reverse() || []);
+                    const gradesRes = await fetch(`/api/students/${student.id}/grades`);
+                    const { data: grades } = await gradesRes.json();
+                    setRecentGrades(grades?.slice(0, 3) || []);
                 }
             } catch (error) {
                 console.error("Error loading dashboard data:", error);
@@ -188,7 +193,7 @@ const StudentDashboard: React.FC = () => {
                                 recentGrades.map((grade) => (
                                     <div key={grade.id} className="flex items-center justify-between">
                                         <div className="flex items-center gap-3">
-                                            <div className={`h-2 w-2 rounded-full ${parseInt(grade.percentage.toString()) >= 80 ? 'bg-success' : 'bg-warning'}`} />
+                                            <div className={`h-2 w-2 rounded-full ${parseInt((grade.percentage || 0).toString()) >= 80 ? 'bg-success' : 'bg-warning'}`} />
                                             <div>
                                                 <p className="text-sm font-medium">Assessment Score</p>
                                                 <p className="text-xs text-muted-foreground">{new Date(grade.graded_at || '').toLocaleDateString()}</p>

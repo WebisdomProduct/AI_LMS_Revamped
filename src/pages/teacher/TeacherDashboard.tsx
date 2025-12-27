@@ -16,14 +16,31 @@ import {
   ArrowRight,
 } from 'lucide-react';
 
+import { dbService } from '@/services/db';
+
 const TeacherDashboard: React.FC = () => {
   const { user } = useAuth();
+  const [dashboardStats, setStats] = React.useState({
+    totalStudents: 0,
+    totalLessons: 0,
+    totalAssessments: 0,
+    classAverage: 0,
+    recentActivity: [] // Initialize empty
+  });
+
+  React.useEffect(() => {
+    const loadStats = async () => {
+      const data = await dbService.getDashboardStats();
+      setStats(data);
+    };
+    loadStats();
+  }, []);
 
   const stats = [
-    { label: 'Lesson Plans', value: '12', icon: FileText, color: 'text-primary', bgColor: 'bg-primary/10' },
-    { label: 'Assessments', value: '8', icon: ClipboardList, color: 'text-accent', bgColor: 'bg-accent/10' },
-    { label: 'Students', value: '156', icon: Users, color: 'text-student', bgColor: 'bg-student/10' },
-    { label: 'This Week', value: '5', icon: Calendar, color: 'text-warning', bgColor: 'bg-warning/10' },
+    { label: 'Lesson Plans', value: dashboardStats.totalLessons.toString(), icon: FileText, color: 'text-primary', bgColor: 'bg-primary/10' },
+    { label: 'Assessments', value: dashboardStats.totalAssessments.toString(), icon: ClipboardList, color: 'text-accent', bgColor: 'bg-accent/10' },
+    { label: 'Students', value: dashboardStats.totalStudents.toString(), icon: Users, color: 'text-student', bgColor: 'bg-student/10' },
+    { label: 'Class Average', value: `${dashboardStats.classAverage}%`, icon: TrendingUp, color: 'text-warning', bgColor: 'bg-warning/10' },
   ];
 
   const quickActions = [
@@ -57,12 +74,12 @@ const TeacherDashboard: React.FC = () => {
     },
   ];
 
-  const recentActivity = [
-    { action: 'Created lesson plan', item: 'Fractions for Grade 5', time: '2 hours ago' },
-    { action: 'Updated assessment', item: 'Math Quiz Chapter 3', time: '5 hours ago' },
-    { action: 'Shared lesson', item: 'Introduction to Algebra', time: '1 day ago' },
-    { action: 'Created lesson plan', item: 'English Grammar Basics', time: '2 days ago' },
-  ];
+  // Fallback if no activity
+  const recentActivity = dashboardStats.recentActivity && dashboardStats.recentActivity.length > 0
+    ? dashboardStats.recentActivity
+    : [
+      { action: 'System', item: 'Welcome to Edu-Spark AI', time: 'Just now' }
+    ];
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -182,20 +199,22 @@ const TeacherDashboard: React.FC = () => {
             <div className="p-4 bg-card rounded-lg border border-border/50">
               <p className="text-sm font-medium text-foreground">💡 Engagement Tip</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Consider adding interactive quizzes to your fraction lessons. Studies show 
+                Consider adding interactive quizzes to your fraction lessons. Studies show
                 40% better retention with gamified learning.
               </p>
             </div>
             <div className="p-4 bg-card rounded-lg border border-border/50">
               <p className="text-sm font-medium text-foreground">📊 Performance Insight</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Your Grade 5 students show strong progress in geometry. Consider 
+                Your Grade 5 students show strong progress in geometry. Consider
                 introducing more challenging problems next week.
               </p>
             </div>
-            <Button variant="outline" className="w-full">
-              View All Insights
-            </Button>
+            <Link to="/teacher/analytics">
+              <Button variant="outline" className="w-full">
+                View All Insights
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       </div>

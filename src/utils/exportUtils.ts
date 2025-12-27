@@ -16,11 +16,14 @@ export const exportToPDF = (lesson: Lesson) => {
         doc.text(`Subject: ${lesson.subject} | Grade: ${lesson.grade}`, 20, 30);
         doc.text(`Topic: ${lesson.topic}`, 20, 38);
 
-        // Content
+        // Content - Strip HTML tags for basic PDF text
         doc.setFontSize(11);
         doc.setTextColor(0, 0, 0);
 
-        const splitText = doc.splitTextToSize(lesson.content, 170);
+        // Simple HTML strip
+        const plainText = lesson.content.replace(/<[^>]+>/g, '\n').replace(/&nbsp;/g, ' ').replace(/\n\s*\n/g, '\n').trim();
+
+        const splitText = doc.splitTextToSize(plainText, 170);
         doc.text(splitText, 20, 50);
 
         doc.save(`${lesson.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`);
@@ -31,30 +34,42 @@ export const exportToPDF = (lesson: Lesson) => {
     }
 };
 
-export const createGoogleDoc = async (lesson: Lesson, apiKey?: string, token?: string) => {
-    // This is a stub implementation as we cannot generate valid Google API credentials here.
-    // In a real app, this would use the Google Drive API.
+export const createGoogleDoc = async (lesson: Lesson) => {
+    try {
+        const response = await fetch('/api/export/google-doc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                title: lesson.title,
+                content: lesson.content
+            })
+        });
 
-    return new Promise<{ success: boolean; url?: string; message: string }>((resolve) => {
-        setTimeout(() => {
-            if (!apiKey) {
-                resolve({
-                    success: false,
-                    message: 'Google API Key not configured. Please add your credentials in Settings.'
-                });
-                return;
-            }
+        if (response.status === 401) {
+            return {
+                success: false,
+                authUrl: '/api/auth/google', // Backend redirect URL
+                message: 'Please connect your Google Account'
+            };
+        }
 
-            // Mock success
-            const mockDocId = `1${crypto.randomUUID()}`;
-            const mockUrl = `https://docs.google.com/document/d/${mockDocId}/edit`;
-            resolve({
-                success: true,
-                url: mockUrl,
-                message: 'Draft created in Google Docs (Mock)'
-            });
-        }, 1500);
-    });
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to create doc');
+        }
+
+        return {
+            success: true,
+            url: data.url,
+            message: 'Google Doc created successfully'
+        };
+    } catch (error: any) {
+        return {
+            success: false,
+            message: error.message || 'Error creating Google Doc'
+        };
+    }
 };
 
 export const shareLesson = async (lesson: Lesson, emails: string[]) => {

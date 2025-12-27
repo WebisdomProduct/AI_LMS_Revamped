@@ -1,20 +1,19 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import {
-  Bold,
-  Italic,
-  List,
-  ListOrdered,
-  Heading1,
-  Heading2,
-  Undo,
-  Redo,
-  Edit3,
-} from 'lucide-react';
+import { Edit3, Undo, Redo, Mic, MicOff, Sparkles, Send } from 'lucide-react';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
+import showdown from 'showdown';
+import { useVoiceInput } from '@/hooks/useVoiceInput';
 import { cn } from '@/lib/utils';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
 
 interface LessonEditorProps {
   content: string;
@@ -22,6 +21,7 @@ interface LessonEditorProps {
   title: string;
   onTitleChange: (title: string) => void;
   disabled?: boolean;
+  onRefine?: (instruction: string) => Promise<void>;
 }
 
 const LessonEditor: React.FC<LessonEditorProps> = ({
@@ -30,97 +30,162 @@ const LessonEditor: React.FC<LessonEditorProps> = ({
   title,
   onTitleChange,
   disabled,
+  onRefine
 }) => {
-  const [isPreview, setIsPreview] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [history, setHistory] = useState<string[]>([content]);
-  const [historyIndex, setHistoryIndex] = useState(0);
+  const [editorHtml, setEditorHtml] = useState(content);
+  const quillRef = useRef<ReactQuill>(null);
+  const [refineInstruction, setRefineInstruction] = useState('');
+  const [isRefining, setIsRefining] = useState(false);
+  const [popoverOpen, setPopoverOpen] = useState(false);
 
-  // Save to history on significant changes
+  const { isListening, transcript, startListening, stopListening, resetTranscript, support: voiceSupport } = useVoiceInput();
+
+  // Initialize converter
+  const converter = new showdown.Converter({
+    tables: true,
+    simplifiedAutoLink: true,
+    strikethrough: true,
+    tasklists: true
+  });
+
+  // Handle initial content load
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      if (content !== history[historyIndex]) {
-        const newHistory = history.slice(0, historyIndex + 1);
-        newHistory.push(content);
-        setHistory(newHistory.slice(-50)); // Keep last 50 states
-        setHistoryIndex(newHistory.length - 1);
+    if (content && !content.trim().startsWith('<') && !editorHtml) {
+      setEditorHtml(converter.makeHtml(content));
+    } else if (content && content !== editorHtml && !editorHtml) {
+      setEditorHtml(content);
+    } else if (content !== editorHtml && content.length > 0) {
+      // If content changes externally (e.g. via AI Refine), update editor
+      // But checking length > 0 avoids clearing if parent passes empty initially and we have state
+      // A better check: if we just refined, force update.
+      // For now, let's allow external updates if significantly different.
+      // We'll trust React's reconciliation or manual check.
+      // Actually, if we type in editor, handleChange updates editorHtml AND parent.
+      // So content prop matches editorHtml.
+      // If Refine updates content prop, it won't match, so we update here.
+      if (Math.abs(content.length - editorHtml.length) > 10) { // arbitrary threshold to avoid minor loop/cursor jumps
+        setEditorHtml(content);
       }
-    }, 1000);
-
-    return () => clearTimeout(timeout);
+    }
   }, [content]);
 
-  const insertText = (before: string, after: string = '') => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selectedText = content.substring(start, end);
-    const newContent =
-      content.substring(0, start) + before + selectedText + after + content.substring(end);
-
-    onChange(newContent);
-
-    // Restore cursor position
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + before.length, end + before.length);
-    }, 0);
-  };
-
-  const handleUndo = () => {
-    if (historyIndex > 0) {
-      setHistoryIndex(historyIndex - 1);
-      onChange(history[historyIndex - 1]);
+  const handleVoiceToggle = () => {
+    if (isListening) {
+      stopListening();
+      // Insert text when stopped
+      if (transcript) {
+        const quill = quillRef.current?.getEditor();
+        if (quill) {
+          const range = quill.getSelection(true);
+          if (range) {
+            quill.insertText(range.index, ' ' + transcript);
+          } else {
+            quill.insertText(quill.getLength(), ' ' + transcript);
+          }
+          resetTranscript();
+        }
+      }
+    } else {
+      resetTranscript();
+      startListening();
     }
   };
 
-  const handleRedo = () => {
-    if (historyIndex < history.length - 1) {
-      setHistoryIndex(historyIndex + 1);
-      onChange(history[historyIndex + 1]);
+  const handleRefineSubmit = async () => {
+    if (!onRefine || !refineInstruction) return;
+    setIsRefining(true);
+    try {
+      await onRefine(refineInstruction);
+      setRefineInstruction('');
+      setPopoverOpen(false);
+    } finally {
+      setIsRefining(false);
     }
   };
 
-  const toolbarButtons = [
-    { icon: Bold, label: 'Bold', action: () => insertText('**', '**') },
-    { icon: Italic, label: 'Italic', action: () => insertText('*', '*') },
-    { icon: Heading1, label: 'Heading 1', action: () => insertText('\n# ') },
-    { icon: Heading2, label: 'Heading 2', action: () => insertText('\n## ') },
-    { icon: List, label: 'Bullet List', action: () => insertText('\n- ') },
-    { icon: ListOrdered, label: 'Numbered List', action: () => insertText('\n1. ') },
+  const handleChange = (html: string) => {
+    setEditorHtml(html);
+    onChange(html);
+  };
+
+  const modules = {
+    toolbar: [
+      [{ 'header': [1, 2, 3, false] }],
+      ['bold', 'italic', 'underline', 'strike', 'blockquote'],
+      [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
+      ['link', 'image'],
+      ['clean']
+    ],
+  };
+
+  const formats = [
+    'header',
+    'bold', 'italic', 'underline', 'strike', 'blockquote',
+    'list', 'bullet', 'indent',
+    'link', 'image'
   ];
-
-  const renderMarkdown = (text: string) => {
-    // Simple markdown rendering
-    let html = text
-      // Headers
-      .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-      .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-      .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-      // Bold
-      .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
-      // Italic
-      .replace(/\*(.*?)\*/gim, '<em>$1</em>')
-      // Lists
-      .replace(/^\- (.*$)/gim, '<li>$1</li>')
-      .replace(/^\d+\. (.*$)/gim, '<li>$1</li>')
-      // Paragraphs
-      .replace(/\n\n/g, '</p><p>')
-      .replace(/\n/g, '<br/>');
-
-    return `<p>${html}</p>`;
-  };
 
   return (
     <Card className="border-border/50">
       <CardHeader className="pb-4">
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Edit3 className="h-5 w-5 text-primary" />
-          Lesson Content
-        </CardTitle>
-        <CardDescription>Edit and refine your AI-generated lesson plan</CardDescription>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Edit3 className="h-5 w-5 text-primary" />
+            Lesson Content
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            {onRefine && (
+              <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2 border-purple-500/50 text-purple-600 hover:text-purple-700 hover:bg-purple-50">
+                    <Sparkles className="h-4 w-4" />
+                    Refine with AI
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-3" align="end">
+                  <div className="space-y-3">
+                    <h4 className="font-medium text-sm">AI Refinement</h4>
+                    <p className="text-xs text-muted-foreground">
+                      How should AI improve this lesson?
+                    </p>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="e.g. 'Make it more interactive', 'Simplify'"
+                        value={refineInstruction}
+                        onChange={(e) => setRefineInstruction(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleRefineSubmit()}
+                        className="h-8 text-sm"
+                      />
+                      <Button size="icon" className="h-8 w-8 shrink-0" onClick={handleRefineSubmit} disabled={isRefining || !refineInstruction}>
+                        {isRefining ? <Sparkles className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
+
+            {voiceSupport && (
+              <Button
+                variant={isListening ? "destructive" : "outline"}
+                size="sm"
+                onClick={handleVoiceToggle}
+                className={cn("gap-2", isListening && "animate-pulse")}
+                type="button"
+              >
+                {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                {isListening ? "Stop" : "Voice Input"}
+              </Button>
+            )}
+          </div>
+        </div>
+        <CardDescription>
+          {isListening ? (
+            <span className="text-primary font-medium italic">"{transcript}"</span>
+          ) : (
+            "Edit and refine your AI-generated lesson plan using the rich text editor."
+          )}
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Title Input */}
@@ -133,84 +198,31 @@ const LessonEditor: React.FC<LessonEditorProps> = ({
             onChange={(e) => onTitleChange(e.target.value)}
             placeholder="Enter a title for your lesson..."
             disabled={disabled}
-            className="w-full px-3 py-2 rounded-lg border border-input bg-background text-lg font-semibold input-focus"
+            className="w-full px-3 py-2 rounded-lg border border-input bg-background/50 text-lg font-semibold input-focus"
           />
         </div>
 
-        {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-1 p-2 bg-muted/50 rounded-lg border border-border/50">
-          {toolbarButtons.map((btn) => (
-            <Button
-              key={btn.label}
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={btn.action}
-              disabled={disabled || isPreview}
-              title={btn.label}
-              className="h-8 w-8 p-0"
-            >
-              <btn.icon className="h-4 w-4" />
-            </Button>
-          ))}
-          <div className="w-px h-6 bg-border mx-1" />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={handleUndo}
-            disabled={disabled || isPreview || historyIndex <= 0}
-            title="Undo"
-            className="h-8 w-8 p-0"
-          >
-            <Undo className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={handleRedo}
-            disabled={disabled || isPreview || historyIndex >= history.length - 1}
-            title="Redo"
-            className="h-8 w-8 p-0"
-          >
-            <Redo className="h-4 w-4" />
-          </Button>
-          <div className="flex-1" />
-          <Button
-            type="button"
-            variant={isPreview ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => setIsPreview(!isPreview)}
-            disabled={disabled}
-          >
-            {isPreview ? 'Edit' : 'Preview'}
-          </Button>
-        </div>
+        {/* Rich Text Editor */}
+        <div className="min-h-[400px] bg-background rounded-lg overflow-hidden relative">
+          <ReactQuill
+            ref={quillRef}
+            theme="snow"
+            value={editorHtml}
+            onChange={handleChange}
+            modules={modules}
+            formats={formats}
+            readOnly={disabled}
+            className="prose-editor h-[400px]"
+          />
 
-        {/* Editor / Preview */}
-        <div className="min-h-[400px] relative">
-          {isPreview ? (
-            <div
-              className="prose-editor p-4 bg-muted/30 rounded-lg border border-border/50 min-h-[400px] overflow-auto"
-              dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }}
-            />
-          ) : (
-            <Textarea
-              ref={textareaRef}
-              value={content}
-              onChange={(e) => onChange(e.target.value)}
-              placeholder="Your lesson content will appear here..."
-              disabled={disabled}
-              className="min-h-[400px] resize-none font-mono text-sm input-focus"
-            />
+          {isRefining && (
+            <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] flex items-center justify-center z-10">
+              <div className="flex flex-col items-center gap-2 bg-background p-4 rounded-lg shadow-lg border border-border animate-in fade-in zoom-in">
+                <Sparkles className="h-8 w-8 text-purple-600 animate-spin" />
+                <span className="text-sm font-medium">Refining content...</span>
+              </div>
+            </div>
           )}
-        </div>
-
-        {/* Character count */}
-        <div className="flex justify-between text-xs text-muted-foreground">
-          <span>{content.split(/\s+/).filter(Boolean).length} words</span>
-          <span>{content.length} characters</span>
         </div>
       </CardContent>
     </Card>

@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Save, Loader2, Plus, Trash2, HelpCircle } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, Plus, Trash2, HelpCircle, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import LessonContextForm from '@/components/lessons/LessonContextForm';
 
@@ -75,21 +75,35 @@ const EditAssessment: React.FC = () => {
         if (!assessment || !id) return;
         setIsSaving(true);
         try {
-            // For simplicity, we update the assessment metadata. 
-            // In a real app we'd also sync questions.
-            const { error } = await dbService.updateAssessment(id, {
-                ...assessment,
-                class_name: context.className,
-                grade: context.grade,
-                subject: context.subject,
-                topic: context.topic,
-                questions_count: questions.length
-            });
+            // Updated to send questions as well
+            const questionsValues = questions.map(q => ({
+                ...q,
+                options: Array.isArray(q.options) ? q.options : [], // Ensure format
+            }));
 
-            if (!error) {
-                toast({ title: 'Assessment Updated', description: 'Your changes have been saved.' });
-                navigate(`/teacher/assessments/${id}`);
-            }
+            // Use direct fetch for better control if dbService doesn't support questions in updateAssessment type yet
+            const res = await fetch(`/api/assessments/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ...assessment,
+                    class_name: context.className,
+                    grade: context.grade,
+                    subject: context.subject,
+                    topic: context.topic,
+                    questions_count: questions.length,
+                    questions: questionsValues // Send questions to be replaced
+                })
+            });
+            const data = await res.json();
+
+            if (data.error) throw new Error(data.error);
+
+            toast({ title: 'Assessment Updated', description: 'Your changes have been saved.' });
+            navigate(`/teacher/assessments/${id}`);
+        } catch (error: any) {
+            console.error('Update failed:', error);
+            toast({ title: 'Error', description: error.message || 'Failed to update', variant: 'destructive' });
         } finally {
             setIsSaving(false);
         }
@@ -187,6 +201,69 @@ const EditAssessment: React.FC = () => {
                 </div>
 
                 <div className="lg:col-span-2 space-y-6">
+                    <Card className="border-border/50">
+                        <CardHeader className="pb-4">
+                            <CardTitle className="flex items-center gap-2 text-lg">
+                                <Sparkles className="h-5 w-5 text-accent" />
+                                AI Assistant
+                            </CardTitle>
+                            <CardDescription>Refine existing questions or generate new ones</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="flex gap-2">
+                                <Input
+                                    placeholder="E.g., 'Make questions harder', 'Add 2 more about gravity'..."
+                                    id="ai-prompt"
+                                />
+                                <Button
+                                    className="btn-gradient-accent shrink-0"
+                                    onClick={async () => {
+                                        const prompt = (document.getElementById('ai-prompt') as HTMLInputElement).value;
+                                        if (!prompt) return;
+
+                                        const btn = document.getElementById('ai-btn');
+                                        if (btn) btn.innerHTML = 'Refining...';
+
+                                        try {
+                                            const res = await fetch('/api/ai/refine-assessment', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({
+                                                    questions,
+                                                    instruction: prompt,
+                                                    grade: context.grade,
+                                                    subject: context.subject,
+                                                    topic: context.topic
+                                                })
+                                            });
+                                            const data = await res.json();
+                                            if (data.questions) {
+                                                // Map to ensure format matches state
+                                                const newQs = data.questions.map((q: any) => ({
+                                                    question_text: q.text,
+                                                    question_type: q.type || 'mcq',
+                                                    options: q.options || [],
+                                                    correct_answer: q.correctAnswer || q.correct_answer,
+                                                    marks: q.points || q.marks || 1
+                                                }));
+                                                setQuestions(newQs);
+                                                toast({ title: 'Assessment Refined', description: 'Questions updated by AI.' });
+                                            }
+                                        } catch (e) {
+                                            console.error(e);
+                                            toast({ title: 'Error', description: 'Failed to refine assessment.', variant: 'destructive' });
+                                        } finally {
+                                            if (btn) btn.innerHTML = 'Refine with AI';
+                                        }
+                                    }}
+                                    id="ai-btn"
+                                >
+                                    Refine with AI
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between">
                             <div>

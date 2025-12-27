@@ -1,15 +1,15 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Source+Sans+3:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Source+Sans+3:wght@300;400;500;600;700&display=swap');
 
 @layer base {
   :root {
     /* Primary - Deep Educational Blue */
     --primary: 220 70% 45%;
     --primary-foreground: 0 0% 100%;
-    
+
     /* Background & Foreground */
     --background: 220 25% 97%;
     --foreground: 220 30% 15%;
@@ -75,7 +75,7 @@
     --gradient-primary: linear-gradient(135deg, hsl(220, 70%, 45%), hsl(200, 80%, 50%));
     --gradient-accent: linear-gradient(135deg, hsl(168, 70%, 40%), hsl(142, 70%, 45%));
     --gradient-hero: linear-gradient(135deg, hsl(220, 40%, 18%), hsl(220, 50%, 30%));
-    
+
     /* Shadows */
     --shadow-sm: 0 1px 2px 0 hsl(220 30% 15% / 0.05);
     --shadow-md: 0 4px 6px -1px hsl(220 30% 15% / 0.1), 0 2px 4px -2px hsl(220 30% 15% / 0.1);
@@ -134,7 +134,12 @@
     font-family: 'Inter', 'Source Sans 3', system-ui, sans-serif;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-family: 'Inter', system-ui, sans-serif;
     @apply font-semibold tracking-tight;
   }
@@ -191,48 +196,88 @@
   }
 
   @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
   }
 
   @keyframes slideUp {
-    from { 
-      opacity: 0; 
-      transform: translateY(20px); 
+    from {
+      opacity: 0;
+      transform: translateY(20px);
     }
-    to { 
-      opacity: 1; 
-      transform: translateY(0); 
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
     }
   }
 
   @keyframes slideInLeft {
-    from { 
-      opacity: 0; 
-      transform: translateX(-20px); 
+    from {
+      opacity: 0;
+      transform: translateX(-20px);
     }
-    to { 
-      opacity: 1; 
-      transform: translateX(0); 
+
+    to {
+      opacity: 1;
+      transform: translateX(0);
     }
   }
 
   @keyframes pulseSubtle {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.8; }
+
+    0%,
+    100% {
+      opacity: 1;
+    }
+
+    50% {
+      opacity: 0.8;
+    }
   }
 }
 
 /* Rich Text Editor Styles */
-.prose-editor h1 { @apply text-2xl font-bold mb-4 text-foreground; }
-.prose-editor h2 { @apply text-xl font-semibold mb-3 text-foreground; }
-.prose-editor h3 { @apply text-lg font-semibold mb-2 text-foreground; }
-.prose-editor p { @apply mb-3 text-foreground/90 leading-relaxed; }
-.prose-editor ul { @apply list-disc list-inside mb-3 space-y-1; }
-.prose-editor ol { @apply list-decimal list-inside mb-3 space-y-1; }
-.prose-editor li { @apply text-foreground/90; }
-.prose-editor strong { @apply font-semibold text-foreground; }
-.prose-editor em { @apply italic; }
+.prose-editor h1 {
+  @apply text-2xl font-bold mb-4 text-foreground;
+}
+
+.prose-editor h2 {
+  @apply text-xl font-semibold mb-3 text-foreground;
+}
+
+.prose-editor h3 {
+  @apply text-lg font-semibold mb-2 text-foreground;
+}
+
+.prose-editor p {
+  @apply mb-3 text-foreground/90 leading-relaxed;
+}
+
+.prose-editor ul {
+  @apply list-disc list-inside mb-3 space-y-1;
+}
+
+.prose-editor ol {
+  @apply list-decimal list-inside mb-3 space-y-1;
+}
+
+.prose-editor li {
+  @apply text-foreground/90;
+}
+
+.prose-editor strong {
+  @apply font-semibold text-foreground;
+}
+
+.prose-editor em {
+  @apply italic;
+}
 
 /* Scrollbar Styling */
 ::-webkit-scrollbar {

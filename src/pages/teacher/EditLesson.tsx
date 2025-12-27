@@ -133,6 +133,21 @@ const EditLesson: React.FC = () => {
                         onChange={setContent}
                         title={title}
                         onTitleChange={setTitle}
+                        onRefine={async (instruction) => {
+                            try {
+                                const res = await fetch('/api/ai/lesson-refine', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ content, instruction })
+                                });
+                                const data = await res.json();
+                                if (data.error) throw new Error(data.error);
+                                setContent(data.content);
+                                toast({ title: "Lesson Refined", description: "AI has updated the content." });
+                            } catch (error: any) {
+                                toast({ title: "Refinement Failed", description: error.message, variant: "destructive" });
+                            }
+                        }}
                     />
                 </div>
 

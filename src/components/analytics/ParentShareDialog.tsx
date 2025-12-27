@@ -12,7 +12,7 @@ import jsPDF from 'jspdf';
 interface ParentShareDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    students: any[]; // Extended student type with performance data
+    students: Student[];
 }
 
 export const ParentShareDialog: React.FC<ParentShareDialogProps> = ({ open, onOpenChange, students }) => {
@@ -40,8 +40,10 @@ export const ParentShareDialog: React.FC<ParentShareDialogProps> = ({ open, onOp
                     doc.text(`Report for All Students (${students.length})`, 20, 40);
                 } else {
                     const student = students.find(s => s.id === selectedStudent);
-                    doc.text(`Report for: ${student?.name}`, 20, 40);
-                    doc.text(`Current Average: ${student?.average.toFixed(1)}%`, 20, 50);
+                    if (student) {
+                        doc.text(`Report for: ${student.name}`, 20, 40);
+                        doc.text(`Current Average: ${student.average?.toFixed(1) || 'N/A'}%`, 20, 50);
+                    }
                 }
 
                 doc.save('parent-report.pdf');

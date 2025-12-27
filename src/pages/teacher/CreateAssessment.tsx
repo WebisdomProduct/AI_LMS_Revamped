@@ -16,11 +16,14 @@ import { ArrowLeft, Sparkles, Save, Loader2, Wand2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateAssessment } from '@/services/ai';
 
+import QuestionListEditor from '@/components/assessments/QuestionListEditor';
+
+
+
 const CreateAssessment: React.FC = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
     const { toast } = useToast();
-
     const [context, setContext] = useState<LessonContext>({
         className: '',
         grade: '',
@@ -32,6 +35,7 @@ const CreateAssessment: React.FC = () => {
     const [difficulty, setDifficulty] = useState('medium');
     const [questionCount, setQuestionCount] = useState(5);
     const [prompt, setPrompt] = useState('');
+    const [dueDate, setDueDate] = useState('');
 
     const [generatedAssessment, setGeneratedAssessment] = useState<any>(null);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -45,19 +49,40 @@ const CreateAssessment: React.FC = () => {
             return;
         }
 
-        const finalPrompt = prompt || `Create a ${difficulty} ${type} assessment on ${context.topic}`;
-
         setIsGenerating(true);
         try {
-            const assessmentData = await generateAssessment(finalPrompt, {
-                ...context,
-                type,
-                difficulty,
-                questionCount
+            const res = await fetch('/api/ai/assessment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    grade: context.grade,
+                    subject: context.subject,
+                    topic: context.topic,
+                    type,
+                    count: questionCount,
+                    additionalPrompt: prompt
+                })
             });
+            const assessmentData = await res.json();
+            if (assessmentData.error) throw new Error(assessmentData.error);
 
             if (assessmentData) {
-                setGeneratedAssessment(assessmentData);
+                // Ensure questions structure matches what UI expects
+                const formattedQuestions = (assessmentData.questions || []).map((q: any) => ({
+                    text: q.question_text || q.text || '',
+                    type: q.question_type || q.type || 'mcq',
+                    options: q.options || [],
+                    correctAnswer: q.correct_answer || q.correctAnswer || '',
+                    points: q.marks || q.points || 1,
+                    explanation: q.explanation || ''
+                }));
+
+                const formattedData = {
+                    ...assessmentData,
+                    questions: formattedQuestions,
+                    rubric: assessmentData.rubric || {}
+                };
+                setGeneratedAssessment(formattedData);
                 toast({ title: 'Assessment Generated!', description: 'Review and save your assessment.' });
             }
         } catch (err: any) {
@@ -73,40 +98,37 @@ const CreateAssessment: React.FC = () => {
 
         setIsSaving(true);
         try {
-            // 1. Create Assessment & Questions using dbService
-            await dbService.createAssessmentWithQuestions(
-                {
-                    teacher_id: user.id,
+            const payload = {
+                assessment: {
+                    teacher_id: "teacher-demo-id",
                     title: generatedAssessment.title || `${context.topic} Assessment`,
                     class_name: context.className,
                     grade: context.grade,
                     subject: context.subject,
                     topic: context.topic,
                     type: type,
-                    difficulty: difficulty,
-                    questions_count: generatedAssessment.questions.length,
-                    rubric: generatedAssessment.rubric || {},
-                    status: 'draft'
+                    due_date: dueDate // Added Due Date
                 },
-                generatedAssessment.questions.map((q: any, index: number) => {
-                    const options = q.options ? q.options.map((optText: string) => ({
-                        text: optText,
-                        isCorrect: optText === q.correctAnswer
-                    })) : [];
+                questions: generatedAssessment.questions.map((q: any) => ({
+                    question_text: q.text,
+                    question_type: q.type || 'mcq',
+                    options: q.options || [],
+                    correct_answer: q.correctAnswer,
+                    marks: q.points || 1
+                })),
+                rubric: generatedAssessment.rubric
+            };
 
-                    return {
-                        question_text: q.text,
-                        question_type: q.type || 'mcq',
-                        options: options,
-                        correct_answer: q.correctAnswer,
-                        marks: q.points || 1,
-                        explanation: q.explanation,
-                        order_index: index
-                    };
-                })
-            );
+            const res = await fetch('/api/assessments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
 
-            toast({ title: 'Success', description: 'Assessment saved successfully.' });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+
+            toast({ title: 'Success', description: 'Assessment saved and published.' });
             navigate('/teacher/assessments');
         } catch (err: any) {
             console.error('Save error:', err);
@@ -133,7 +155,7 @@ const CreateAssessment: React.FC = () => {
                     {generatedAssessment && (
                         <Button onClick={handleSave} disabled={isSaving} className="btn-gradient">
                             {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                            Save Assessment
+                            Publish Assessment
                         </Button>
                     )}
                 </div>
@@ -189,6 +211,15 @@ const CreateAssessment: React.FC = () => {
                                     onChange={(e) => setQuestionCount(parseInt(e.target.value))}
                                 />
                             </div>
+
+                            <div className="space-y-2">
+                                <Label>Due Date</Label>
+                                <Input
+                                    type="date"
+                                    value={dueDate}
+                                    onChange={(e) => setDueDate(e.target.value)}
+                                />
+                            </div>
                         </CardContent>
                     </Card>
                 </div>
@@ -225,41 +256,26 @@ const CreateAssessment: React.FC = () => {
                         </CardContent>
                     </Card>
 
-                    {/* Live Preview */}
+                    {/* Editor */}
                     {generatedAssessment && (
-                        <div className="space-y-6">
-                            <Card className="animate-fade-in border-accent/20">
-                                <CardHeader>
-                                    <CardTitle>{generatedAssessment.title}</CardTitle>
-                                    <CardDescription>{generatedAssessment.description}</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="space-y-6">
-                                        {generatedAssessment.questions.map((q: any, i: number) => (
-                                            <div key={i} className="p-4 bg-muted/30 rounded-lg border">
-                                                <div className="flex justify-between mb-2">
-                                                    <h3 className="font-medium text-sm">Question {i + 1}</h3>
-                                                    <span className="text-xs text-muted-foreground">{q.points} pts</span>
-                                                </div>
-                                                <p className="mb-3">{q.text}</p>
-
-                                                {q.options && (
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                        {q.options.map((opt: string, j: number) => (
-                                                            <div key={j} className={`text-sm p-2 rounded border ${opt === q.correctAnswer ? 'bg-success/10 border-success/30' : 'bg-background'}`}>
-                                                                {opt}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                                {q.explanation && (
-                                                    <p className="mt-3 text-xs text-muted-foreground italic">Explanation: {q.explanation}</p>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
+                        <div className="space-y-6 animate-fade-in">
+                            {/* Title Edit */}
+                            <Card className="border-accent/20">
+                                <CardContent className="pt-6">
+                                    <Label>Assessment Title</Label>
+                                    <Input
+                                        value={generatedAssessment.title || ''}
+                                        onChange={(e) => setGeneratedAssessment({ ...generatedAssessment, title: e.target.value })}
+                                        className="font-bold text-lg mt-1"
+                                    />
                                 </CardContent>
                             </Card>
+
+                            {/* Questions Editor */}
+                            <QuestionListEditor
+                                questions={generatedAssessment.questions}
+                                onChange={(newQuestions) => setGeneratedAssessment({ ...generatedAssessment, questions: newQuestions })}
+                            />
 
                             <RubricEditor
                                 rubric={generatedAssessment.rubric}

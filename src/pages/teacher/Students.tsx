@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Search, Loader2, Mail, MessageSquare, BarChart3, X } from 'lucide-react';
+import { Plus, Search, Loader2, Mail, MessageSquare, BarChart3, X, FileText, Download } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { dbService } from '@/services/db';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'; // Assuming Tabs component exists (standard shadcn)
@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import jsPDF from 'jspdf';
 
 interface Student {
     id: string;
@@ -19,6 +20,8 @@ interface Student {
     email: string;
     remarks?: string;
 }
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
 const Students: React.FC = () => {
     const [students, setStudents] = useState<Student[]>([]);
@@ -91,9 +94,97 @@ const Students: React.FC = () => {
         window.location.href = `mailto:${email}`;
     };
 
-    // Calculate Grade Distribution (Mock data for now as grades aren't directly linked in student object without join)
-    // In a real scenario, we'd fetch grades. For now, we'll randomize or fetch from grades service if needed.
-    // However, the requirement says "Analytics section which will tell how many students I have of 5th class or 6th grade etc."
+    const handleDownloadReport = async (student: Student) => {
+        try {
+            toast({ title: "Generating Report...", description: "Please wait while we fetch data." });
+
+            // Fetch grades for the student
+            const { data: grades } = await dbService.getStudentGrades(student.id);
+            // Assuming getStudentGrades returns objects with assessment_title etc. or we just list what we have.
+            // If the join isn't perfect, we might only get IDs. 
+            // The debug script showed grades have total_score etc.
+
+            const doc = new jsPDF();
+
+            // Header
+            doc.setFontSize(22);
+            doc.setTextColor(40, 40, 40);
+            doc.text("Edu-Spark AI", 20, 20);
+
+            doc.setFontSize(16);
+            doc.text("Student Performance Report", 20, 30);
+
+            // Student Details
+            doc.setFontSize(12);
+            doc.setTextColor(60, 60, 60);
+            doc.text(`Name: ${student.name}`, 20, 50);
+            doc.text(`Email: ${student.email}`, 20, 58);
+            doc.text(`Grade/Class: ${student.grade} - ${student.class}`, 20, 66);
+
+            // Remarks
+            if (student.remarks) {
+                doc.text(`Teacher Remarks:`, 20, 80);
+                doc.setFont("helvetica", "italic");
+                doc.text(`"${student.remarks}"`, 25, 88);
+                doc.setFont("helvetica", "normal");
+            }
+
+            // Grades Table Header
+            let yPos = student.remarks ? 105 : 90;
+            doc.setFontSize(14);
+            doc.setTextColor(0);
+            doc.text("Assessment Record", 20, yPos);
+
+            yPos += 10;
+            doc.setFontSize(10);
+            doc.setFillColor(240, 240, 240);
+            doc.rect(20, yPos - 5, 170, 8, 'F');
+            doc.text("Assessment", 22, yPos);
+            doc.text("Score", 100, yPos);
+            doc.text("Grade", 130, yPos);
+            doc.text("Date", 160, yPos);
+
+            yPos += 10;
+
+            if (grades && grades.length > 0) {
+                grades.forEach((g: any, index: number) => {
+                    const title = g.assessment_title || g.assessment_id.substring(0, 8) || "Assessment";
+                    const score = g.percentage ? `${g.percentage}%` : 'N/A';
+                    const letter = g.grade_letter || '-';
+                    const date = g.graded_at ? new Date(g.graded_at).toLocaleDateString() : '-';
+
+                    doc.text(title, 22, yPos);
+                    doc.text(score, 100, yPos);
+                    doc.text(letter, 130, yPos);
+                    doc.text(date, 160, yPos);
+
+                    yPos += 8;
+                });
+
+                // Average
+                const avg = grades.reduce((acc: number, curr: any) => acc + (curr.percentage || 0), 0) / grades.length;
+                yPos += 5;
+                doc.setFont("helvetica", "bold");
+                doc.text(`Overall Average: ${avg.toFixed(1)}%`, 100, yPos);
+            } else {
+                doc.text("No graded assessments recorded.", 22, yPos);
+            }
+
+            // Footer
+            doc.setFontSize(8);
+            doc.setTextColor(150);
+            doc.text(`Generated on ${new Date().toLocaleDateString()}`, 20, 280);
+
+            doc.save(`${student.name.replace(/\s+/g, '_')}_Report.pdf`);
+            toast({ title: "Report Downloaded", description: "PDF has been saved to your device." });
+
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Error", description: "Failed to generate report.", variant: "destructive" });
+        }
+    };
+
+    // Calculate Grade Distribution
     const gradeDistribution = students.reduce((acc, curr) => {
         const grade = curr.grade || 'Unknown';
         acc[grade] = (acc[grade] || 0) + 1;
@@ -103,6 +194,18 @@ const Students: React.FC = () => {
     const chartData = Object.keys(gradeDistribution).map(key => ({
         grade: key,
         count: gradeDistribution[key]
+    }));
+
+    // Calculate Class Distribution for Pie Chart
+    const classDistribution = students.reduce((acc, curr) => {
+        const className = curr.class || 'Unknown';
+        acc[className] = (acc[className] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+
+    const pieData = Object.keys(classDistribution).map(key => ({
+        name: key,
+        value: classDistribution[key]
     }));
 
     if (isLoading) {
@@ -166,6 +269,9 @@ const Students: React.FC = () => {
                                                     ) : <span className="text-xs text-muted-foreground">-</span>}
                                                 </td>
                                                 <td className="py-3 px-4 text-right flex justify-end gap-2">
+                                                    <Button variant="ghost" size="icon" onClick={() => handleDownloadReport(student)} title="Download Report">
+                                                        <Download className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                                                    </Button>
                                                     <Button variant="ghost" size="icon" onClick={() => handleMail(student.email)} title="Mail Student">
                                                         <Mail className="h-4 w-4 text-muted-foreground hover:text-primary" />
                                                     </Button>
@@ -209,38 +315,30 @@ const Students: React.FC = () => {
                         </Card>
                         <Card>
                             <CardHeader>
-                                <CardTitle>Student Composition</CardTitle>
-                                <CardDescription>Key metrics about your student body</CardDescription>
+                                <CardTitle>Class Distribution</CardTitle>
+                                <CardDescription>Students distribution by class</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <div className="space-y-4">
-                                    <div className="p-4 bg-muted/30 rounded-lg flex justify-between items-center">
-                                        <div>
-                                            <p className="text-sm font-medium">Total Enrollment</p>
-                                            <p className="text-2xl font-bold">{students.length}</p>
-                                        </div>
-                                        <div className="h-10 w-10 bg-primary/10 rounded-full flex items-center justify-center">
-                                            <Plus className="h-5 w-5 text-primary" />
-                                        </div>
-                                    </div>
-                                    <div className="p-4 bg-muted/30 rounded-lg flex justify-between items-center">
-                                        <div>
-                                            <p className="text-sm font-medium">Classes/Sections</p>
-                                            <p className="text-2xl font-bold">{[...new Set(students.map(s => s.class))].length}</p>
-                                        </div>
-                                        <div className="h-10 w-10 bg-accent/10 rounded-full flex items-center justify-center">
-                                            <BarChart3 className="h-5 w-5 text-accent" />
-                                        </div>
-                                    </div>
-                                    <div className="p-4 bg-muted/30 rounded-lg flex justify-between items-center">
-                                        <div>
-                                            <p className="text-sm font-medium">Grades Taught</p>
-                                            <p className="text-2xl font-bold">{Object.keys(gradeDistribution).length}</p>
-                                        </div>
-                                        <div className="h-10 w-10 bg-warning/10 rounded-full flex items-center justify-center">
-                                            <Search className="h-5 w-5 text-warning" />
-                                        </div>
-                                    </div>
+                                <div className="h-[300px] w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie
+                                                data={pieData}
+                                                cx="50%"
+                                                cy="50%"
+                                                labelLine={false}
+                                                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                                outerRadius={100}
+                                                fill="#8884d8"
+                                                dataKey="value"
+                                            >
+                                                {pieData.map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                                ))}
+                                            </Pie>
+                                            <Tooltip />
+                                        </PieChart>
+                                    </ResponsiveContainer>
                                 </div>
                             </CardContent>
                         </Card>

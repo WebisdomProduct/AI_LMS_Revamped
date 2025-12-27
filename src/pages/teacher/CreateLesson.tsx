@@ -1,185 +1,247 @@
 import React, { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2, Sparkles, Save, BookOpen, GraduationCap, ArrowRight } from "lucide-react";
+import { toast } from "@/hooks/use-toast"; // Using local toast hook consistent with other files
 import { useNavigate } from 'react-router-dom';
-import { LessonContext } from '@/types';
-import { useLessons } from '@/hooks/useLessons';
-import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import LessonContextForm from '@/components/lessons/LessonContextForm';
 import LessonEditor from '@/components/lessons/LessonEditor';
-import VoiceInput from '@/components/lessons/VoiceInput';
-import { ArrowLeft, Sparkles, Save, FileDown, Loader2, Wand2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import jsPDF from 'jspdf';
 
-const CreateLesson: React.FC = () => {
+const CreateLesson = () => {
   const navigate = useNavigate();
-  const { createLesson } = useLessons();
-  const { toast } = useToast();
+  const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(false);
 
-  const [context, setContext] = useState<LessonContext>({
-    className: '',
-    grade: '',
-    subject: '',
-    topic: '',
-  });
-  const [prompt, setPrompt] = useState('');
+  // Form State
+  const [grade, setGrade] = useState('');
+  const [subject, setSubject] = useState('');
+  const [topic, setTopic] = useState('');
+  const [additionalPrompt, setAdditionalPrompt] = useState('');
+
+  // Editor State
+  const [generatedContent, setGeneratedContent] = useState('');
   const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-
-  const isContextComplete = context.className && context.grade && context.subject && context.topic;
 
   const handleGenerate = async () => {
-    if (!isContextComplete) {
-      toast({ title: 'Missing Context', description: 'Please select all curriculum fields.', variant: 'destructive' });
+    if (!grade || !subject || !topic) {
+      toast({
+        title: "Missing Fields",
+        description: "Please fill in all required fields.",
+        variant: "destructive"
+      });
       return;
     }
 
-    const finalPrompt = prompt || `Create a comprehensive lesson plan for ${context.topic} for ${context.grade} ${context.subject}`;
-
-    setIsGenerating(true);
+    setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('generate-lesson', {
-        body: { prompt: finalPrompt, context },
+      const response = await fetch('/api/ai/lesson-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grade, subject, topic, additionalPrompt })
       });
 
-      if (error) throw error;
+      const data = await response.json();
+      if (data.error) throw new Error(data.error);
 
-      if (data.content) {
-        setContent(data.content);
-        setTitle(`${context.topic} - ${context.grade} ${context.subject}`);
-        toast({ title: 'Lesson Generated!', description: 'Your AI-powered lesson plan is ready to edit.' });
-      }
+      setGeneratedContent(data.content); // Fixed: backend returns 'content', not 'plan'
+      setTitle(`${topic} Lesson Plan`);
+      setStep(2);
+      toast({
+        title: "Lesson Generated",
+        description: "AI has created a draft for you. Review and edit below."
+      });
+    } catch (error: any) {
+      console.error(error);
+      toast({
+        title: "Generation Failed",
+        description: "Could not generate lesson plan. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async (status: 'draft' | 'published' = 'draft') => {
+    try {
+      const res = await fetch('/api/lessons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teacher_id: 'teacher-demo-id', // Hardcoded for demo
+          title: title,
+          class_name: 'Grade ' + grade,
+          grade,
+          subject,
+          topic,
+          content: generatedContent,
+          status: status
+        })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      toast({ title: "Success", description: `Lesson ${status === 'published' ? 'published' : 'saved'} successfully!` });
+      navigate('/teacher/lessons');
     } catch (err: any) {
-      console.error('Generation error:', err);
-      toast({ title: 'Generation Failed', description: err.message || 'Please try again.', variant: 'destructive' });
-    } finally {
-      setIsGenerating(false);
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     }
   };
 
-  const handleSave = async () => {
-    if (!title || !content) {
-      toast({ title: 'Missing Content', description: 'Please add a title and content.', variant: 'destructive' });
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      const lesson = await createLesson({
-        title,
-        class_name: context.className,
-        grade: context.grade,
-        subject: context.subject,
-        topic: context.topic,
-        content,
-        prompt,
-        status: 'draft',
-      });
-
-      if (lesson) {
-        navigate('/teacher/lessons');
-      }
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleExportPDF = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(18);
-    doc.text(title || 'Lesson Plan', 20, 20);
-    doc.setFontSize(10);
-    doc.text(`${context.grade} | ${context.subject} | ${context.topic}`, 20, 30);
-    doc.setFontSize(12);
-    
-    const lines = doc.splitTextToSize(content.replace(/[#*]/g, ''), 170);
-    doc.text(lines, 20, 45);
-    doc.save(`${title || 'lesson-plan'}.pdf`);
-    
-    toast({ title: 'PDF Downloaded', description: 'Your lesson plan has been exported.' });
-  };
-
-  const handleVoiceTranscript = (text: string) => {
-    setPrompt((prev) => (prev ? `${prev} ${text}` : text));
-  };
 
   return (
-    <div className="space-y-6 animate-fade-in max-w-5xl mx-auto">
-      {/* Header */}
+    <div className="p-6 max-w-5xl mx-auto space-y-8 animate-fade-in">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/teacher/lessons')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">Create Lesson Plan</h1>
-            <p className="text-muted-foreground">Generate AI-powered lesson plans</p>
-          </div>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Create Lesson Plan</h1>
+          <p className="text-muted-foreground">Generative AI will help you structure your class.</p>
         </div>
-        <div className="flex gap-2">
-          {content && (
-            <>
-              <Button variant="outline" onClick={handleExportPDF}>
-                <FileDown className="h-4 w-4 mr-2" /> Export PDF
-              </Button>
-              <Button onClick={handleSave} disabled={isSaving} className="btn-gradient">
-                {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                Save Lesson
-              </Button>
-            </>
-          )}
+        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-secondary/50 px-4 py-2 rounded-full">
+          <span className={step >= 1 ? "text-primary font-bold" : ""}>1. Details</span>
+          <ArrowRight className="h-4 w-4" />
+          <span className={step >= 2 ? "text-primary font-bold" : ""}>2. Edit & Refine</span>
         </div>
       </div>
 
-      {/* Context Form */}
-      <LessonContextForm context={context} onChange={setContext} />
+      {step === 1 && (
+        <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div className="space-y-6">
+            <Card className="border-border/50 shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-purple-600" />
+                  Lesson Configuration
+                </CardTitle>
+                <CardDescription>
+                  Define the parameters for your lesson.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Grade Level</Label>
+                  <Select onValueChange={setGrade} value={grade}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Grade" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["6", "7", "8", "9", "10", "11", "12"].map((g) => (
+                        <SelectItem key={g} value={g}>Grade {g}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-      {/* Prompt Input */}
-      <Card className="border-border/50">
-        <CardHeader className="pb-4">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Wand2 className="h-5 w-5 text-accent" />
-            Lesson Prompt
-          </CardTitle>
-          <CardDescription>Describe what you want in your lesson or use voice input</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex gap-2">
-            <Textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder={`E.g., "Create an engaging ${context.grade || 'Grade 5'} lesson on ${context.topic || 'fractions'} with hands-on activities and visual examples..."`}
-              className="min-h-[100px] input-focus flex-1"
-            />
-            <VoiceInput onTranscript={handleVoiceTranscript} className="self-start" />
+                <div className="space-y-2">
+                  <Label>Subject</Label>
+                  <Select onValueChange={setSubject} value={subject}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Subject" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["Mathematics", "Science", "History", "Literature", "Computer Science", "Art"].map((s) => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Topic</Label>
+                  <Input
+                    placeholder="e.g. Photosynthesis, World War II, Linear Equations"
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Additional Context (Optional)</Label>
+                  <Textarea
+                    placeholder="Any specific requirements? (e.g. 'Focus on interactive activities', 'Include a quiz')"
+                    value={additionalPrompt}
+                    onChange={(e) => setAdditionalPrompt(e.target.value)}
+                    className="h-24 resize-none"
+                  />
+                </div>
+
+                <Button
+                  className="w-full btn-gradient mt-2 py-6 text-lg"
+                  onClick={handleGenerate}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Generating Plan...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-2 h-5 w-5" />
+                      Generate Lesson Plan
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
           </div>
-          <Button
-            onClick={handleGenerate}
-            disabled={!isContextComplete || isGenerating}
-            className="w-full btn-gradient-accent"
-          >
-            {isGenerating ? (
-              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Generating...</>
-            ) : (
-              <><Sparkles className="h-4 w-4 mr-2" /> Generate Lesson Plan</>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
 
-      {/* Editor */}
-      {(content || isGenerating) && (
-        <LessonEditor
-          content={content}
-          onChange={setContent}
-          title={title}
-          onTitleChange={setTitle}
-          disabled={isGenerating}
-        />
+          <div className="hidden lg:flex flex-col items-center justify-center text-center space-y-6 opacity-80">
+            <div className="p-8 bg-primary/5 rounded-full">
+              <BookOpen className="h-24 w-24 text-primary" />
+            </div>
+            <div className="space-y-2 max-w-md">
+              <h3 className="text-xl font-semibold">AI-Powered Curriculum Design</h3>
+              <p className="text-muted-foreground">
+                EduSpark AI analyzes educational standards to create comprehensive, engaging, and age-appropriate lesson plans in seconds.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="space-y-6 animate-in slide-in-from-right-8 fade-in duration-500">
+          <LessonEditor
+            content={generatedContent}
+            onChange={setGeneratedContent}
+            title={title}
+            onTitleChange={setTitle}
+            onRefine={async (instruction) => {
+              try {
+                const res = await fetch('/api/ai/lesson-refine', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ content: generatedContent, instruction })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                setGeneratedContent(data.content);
+                toast({ title: "Lesson Refined", description: "AI has updated the content." });
+              } catch (error: any) {
+                toast({ title: "Refinement Failed", description: error.message, variant: "destructive" });
+              }
+            }}
+          />
+
+          <div className="flex justify-between items-center pt-4 border-t">
+            <Button variant="outline" onClick={() => setStep(1)}>
+              Back to Settings
+            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => handleSave('draft')} className="gap-2">
+                <Save className="h-4 w-4" />
+                Save Draft
+              </Button>
+              <Button onClick={() => handleSave('published')} className="px-8 btn-gradient gap-2">
+                <BookOpen className="h-4 w-4" />
+                Publish
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

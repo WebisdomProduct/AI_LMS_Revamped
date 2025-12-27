@@ -8,7 +8,7 @@ const groq = new Groq({ apiKey: GROQ_API_KEY, dangerouslyAllowBrowser: true });
 
 // Types
 export interface LessonContext {
-    className: string;
+    className?: string; // Optional for tutor context
     grade: string;
     subject: string;
     topic: string;
@@ -138,7 +138,7 @@ export const autoGradeSubmission = async (question: string, studentAnswer: strin
         return { score: 0, feedback: "Error during auto-grading" };
     }
 };
-export const getTutorResponse = async (message: string, history: any[], context: any) => {
+export const getTutorResponse = async (message: string, history: { role: string; content: string }[], context: LessonContext) => {
     const systemPrompt = `You are "EduSpark AI Tutor", a helpful, encouraging, and highly knowledgeable tutor for students.
     Current Context:
     Grade: ${context.grade}
@@ -160,7 +160,8 @@ export const getTutorResponse = async (message: string, history: any[], context:
         const chatCompletion = await groq.chat.completions.create({
             messages: [
                 { role: 'system', content: systemPrompt },
-                ...history.slice(-5).map((msg: any) => ({ role: msg.role as any, content: msg.content })),
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                ...history.slice(-5).map((msg) => ({ role: msg.role as any, content: msg.content })),
                 { role: 'user', content: message }
             ],
             model: 'llama-3.3-70b-versatile',
@@ -211,7 +212,7 @@ async function callGroq(prompt: string): Promise<string> {
         const response = chatCompletion.choices[0]?.message?.content || "AI response was empty.";
         console.log('[AI] Groq response received successfully');
         return response;
-    } catch (error: any) {
+    } catch (error) {
         console.error('[AI] Groq API Error:', error.message || error);
         return "AI Assistant is currently unavailable. Please check your API key and internet connection.";
     }
@@ -292,7 +293,7 @@ Return ONLY valid JSON, no markdown.`;
 
         console.log('[AI Schedule] Parsed result:', result);
         return result;
-    } catch (error: any) {
+    } catch (error) {
         console.error('[AI Schedule] Error:', error);
         return {
             action: 'error',

@@ -1,8 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
-import { User as AppUser, UserRole } from '@/types';
+import { UserRole, User as AppUser } from '@/types';
 import { useToast } from '@/hooks/use-toast';
+
+// Mock Session type to minimize refactoring impact
+interface Session {
+  user: { id: string; email?: string };
+  access_token: string;
+}
 
 interface AuthContextType {
   user: AppUser | null;
@@ -33,87 +37,52 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  const fetchUserProfile = async (userId: string): Promise<AppUser | null> => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-
-      if (error) {
-        console.error('Error fetching profile:', error);
-        return null;
-      }
-
-      if (data) {
-        return {
-          id: data.user_id,
-          email: data.email,
-          fullName: data.full_name,
-          role: data.role as UserRole,
-          avatarUrl: data.avatar_url,
-        };
-      }
-      return null;
-    } catch (err) {
-      console.error('Error in fetchUserProfile:', err);
-      return null;
-    }
-  };
-
   useEffect(() => {
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, newSession) => {
-        setSession(newSession);
-        
-        if (newSession?.user) {
-          // Defer Supabase calls with setTimeout
-          setTimeout(() => {
-            fetchUserProfile(newSession.user.id).then(profile => {
-              setUser(profile);
-              setIsLoading(false);
-            });
-          }, 0);
-        } else {
-          setUser(null);
-          setIsLoading(false);
-        }
+    // Check for local session
+    const storedSession = localStorage.getItem('lms_local_session');
+    if (storedSession) {
+      try {
+        const parsed = JSON.parse(storedSession);
+        setSession(parsed.session);
+        setUser(parsed.user); // The login response includes the user profile
+      } catch (e) {
+        console.error('Failed to restore session', e);
+        localStorage.removeItem('lms_local_session');
       }
-    );
-
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
-      setSession(existingSession);
-      if (existingSession?.user) {
-        fetchUserProfile(existingSession.user.id).then(profile => {
-          setUser(profile);
-          setIsLoading(false);
-        });
-      } else {
-        setIsLoading(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    }
+    setIsLoading(false);
   }, []);
 
   const signIn = async (email: string, password: string): Promise<{ error: Error | null }> => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
       });
 
-      if (error) {
-        toast({
-          title: 'Sign In Failed',
-          description: error.message,
-          variant: 'destructive',
-        });
-        return { error };
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Login failed');
       }
+
+      const appUser: AppUser = {
+        id: data.user.id,
+        email: data.user.email,
+        fullName: data.user.full_name,
+        role: data.user.role as UserRole,
+        avatarUrl: undefined
+      };
+
+      const sessionData = {
+        user: appUser,
+        session: { user: { id: appUser.id, email: appUser.email }, access_token: 'mock-token' }
+      };
+
+      setSession(sessionData.session);
+      setUser(appUser);
+      localStorage.setItem('lms_local_session', JSON.stringify(sessionData));
 
       toast({
         title: 'Welcome back!',
@@ -138,65 +107,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     role: UserRole,
     fullName?: string
   ): Promise<{ error: Error | null }> => {
-    try {
-      const redirectUrl = `${window.location.origin}/`;
-
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: redirectUrl,
-        },
-      });
-
-      if (error) {
-        toast({
-          title: 'Sign Up Failed',
-          description: error.message,
-          variant: 'destructive',
-        });
-        return { error };
-      }
-
-      // Create profile after successful signup
-      if (data.user) {
-        const { error: profileError } = await supabase.from('profiles').insert({
-          user_id: data.user.id,
-          email: email,
-          full_name: fullName || null,
-          role: role,
-        });
-
-        if (profileError) {
-          console.error('Error creating profile:', profileError);
-          toast({
-            title: 'Profile Creation Failed',
-            description: 'Account created but profile setup failed. Please contact support.',
-            variant: 'destructive',
-          });
-          return { error: profileError as unknown as Error };
-        }
-      }
-
-      toast({
-        title: 'Account Created!',
-        description: 'You have successfully signed up. Welcome aboard!',
-      });
-
-      return { error: null };
-    } catch (err) {
-      const error = err as Error;
-      toast({
-        title: 'Sign Up Failed',
-        description: error.message,
-        variant: 'destructive',
-      });
-      return { error };
-    }
+    // For now, local sign up is not implemented in the backend schema fully (auto-id gen is okay but the endpoint is missing)
+    // I'll leave this as a stub or implement a simple mock if needed.
+    toast({
+      title: 'Not Implemented',
+      description: 'Sign up is not yet supported in local mode. Please use the demo accounts.',
+      variant: 'destructive',
+    });
+    return { error: new Error('Not implemented') };
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    localStorage.removeItem('lms_local_session');
     setUser(null);
     setSession(null);
     toast({

@@ -29,15 +29,15 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({ isCollapsed, onToggle }
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
 
-  const navItems = [
+  const navItems: { icon: any; label: string; href: string; badge?: string }[] = [
     { icon: LayoutDashboard, label: 'Dashboard', href: '/teacher' },
     { icon: FileText, label: 'Lesson Plans', href: '/teacher/lessons' },
     { icon: ClipboardList, label: 'Assessments', href: '/teacher/assessments' },
     { icon: BookOpen, label: 'Gradebook', href: '/teacher/gradebook' },
     { icon: BarChart3, label: 'Analytics', href: '/teacher/analytics' },
-    { icon: Users, label: 'Students', href: '/teacher/students', badge: 'Soon' },
-    { icon: Calendar, label: 'Schedule', href: '/teacher/schedule', badge: 'Soon' },
-    { icon: Settings, label: 'Settings', href: '/teacher/settings', badge: 'Soon' },
+    { icon: Users, label: 'Students', href: '/teacher/students' },
+    { icon: Calendar, label: 'Schedule', href: '/teacher/schedule' },
+    { icon: Settings, label: 'Settings', href: '/teacher/settings' },
   ];
 
   const handleSignOut = async () => {
@@ -67,11 +67,11 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({ isCollapsed, onToggle }
         <div className="flex h-16 items-center justify-between px-4 border-b border-sidebar-border">
           {!isCollapsed && (
             <div className="flex items-center gap-3 animate-fade-in">
-              <div className="h-9 w-9 rounded-lg bg-sidebar-primary/20 flex items-center justify-center">
-                <GraduationCap className="h-5 w-5 text-sidebar-primary" />
+              <div className="h-9 w-9 rounded-lg bg-sidebar-primary/20 flex items-center justify-center overflow-hidden">
+                <img src="/logo.png" alt="EduSpark AI Logo" className="h-full w-full object-cover" />
               </div>
               <div>
-                <h2 className="font-bold text-sidebar-foreground">EduLearn</h2>
+                <h2 className="font-bold text-sidebar-foreground">EduSpark AI</h2>
                 <p className="text-xs text-sidebar-foreground/60">Teacher Portal</p>
               </div>
             </div>
@@ -153,7 +153,7 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({ isCollapsed, onToggle }
               </div>
             )}
           </div>
-          
+
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

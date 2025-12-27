@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { dbService } from '@/services/db';
 import { useAuth } from '@/contexts/AuthContext';
 
 export interface ClassAnalytics {
@@ -68,24 +68,25 @@ export const useAnalytics = () => {
   };
 
   const fetchAnalytics = useCallback(async () => {
-    if (!user) return;
+    // if (!user) return; // Simplified for local demo
 
     try {
       setIsLoading(true);
 
-      // Fetch all teacher's assessments
-      const { data: assessments, error: assessmentsError } = await supabase
-        .from('assessments')
-        .select('*')
-        .eq('teacher_id', user.id);
+      // Fetch all needed data from dbService
+      const [assessmentsRes, gradesRes, studentsRes] = await Promise.all([
+        dbService.getAssessments(user?.id || 'teacher-demo-id'),
+        dbService.getGrades(),
+        dbService.getStudents()
+      ]);
 
-      if (assessmentsError) throw assessmentsError;
+      const assessments = assessmentsRes.data || [];
+      const grades = gradesRes.data || [];
+      const students = studentsRes.data || [];
 
-      const assessmentIds = assessments?.map((a) => a.id) || [];
-
-      if (assessmentIds.length === 0) {
+      if (assessments.length === 0) {
         setAnalytics({
-          totalStudents: 0,
+          totalStudents: students.length,
           totalAssessments: 0,
           averageScore: 0,
           medianScore: 0,
@@ -103,27 +104,8 @@ export const useAnalytics = () => {
         return;
       }
 
-      // Fetch all grades
-      const { data: grades, error: gradesError } = await supabase
-        .from('grades')
-        .select('*')
-        .in('assessment_id', assessmentIds);
-
-      if (gradesError) throw gradesError;
-
-      // Get unique students
-      const studentIds = [...new Set(grades?.map((g) => g.student_id) || [])];
-
-      // Fetch profiles
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('user_id, full_name, email')
-        .in('user_id', studentIds);
-
-      if (profilesError) throw profilesError;
-
       // Calculate statistics
-      const allScores = grades?.map((g) => Number(g.percentage)) || [];
+      const allScores = grades.map((g) => Number(g.percentage));
       const sortedScores = [...allScores].sort((a, b) => a - b);
       const medianScore =
         sortedScores.length > 0
@@ -137,8 +119,8 @@ export const useAnalytics = () => {
 
       const highPerformers = allScores.filter((s) => s >= 80).length;
       const lowPerformers = allScores.filter((s) => s < 40).length;
-      const passingRate = allScores.length > 0 
-        ? (allScores.filter((s) => s >= 40).length / allScores.length) * 100 
+      const passingRate = allScores.length > 0
+        ? (allScores.filter((s) => s >= 40).length / allScores.length) * 100
         : 0;
 
       // Score distribution
@@ -153,8 +135,8 @@ export const useAnalytics = () => {
 
       // Subject performance
       const subjectMap = new Map<string, { total: number; count: number }>();
-      grades?.forEach((g) => {
-        const assessment = assessments?.find((a) => a.id === g.assessment_id);
+      grades.forEach((g) => {
+        const assessment = assessments.find((a) => a.id === g.assessment_id);
         if (assessment) {
           const current = subjectMap.get(assessment.subject) || { total: 0, count: 0 };
           subjectMap.set(assessment.subject, {
@@ -171,8 +153,8 @@ export const useAnalytics = () => {
 
       // Topic performance
       const topicMap = new Map<string, { total: number; count: number }>();
-      grades?.forEach((g) => {
-        const assessment = assessments?.find((a) => a.id === g.assessment_id);
+      grades.forEach((g) => {
+        const assessment = assessments.find((a) => a.id === g.assessment_id);
         if (assessment) {
           const current = topicMap.get(assessment.topic) || { total: 0, count: 0 };
           topicMap.set(assessment.topic, {
@@ -190,23 +172,22 @@ export const useAnalytics = () => {
         .slice(0, 10);
 
       // Student performance
-      const studentPerformance = studentIds.map((studentId) => {
-        const profile = profiles?.find((p) => p.user_id === studentId);
-        const studentGrades = grades?.filter((g) => g.student_id === studentId) || [];
+      const studentPerformance = students.map((student) => {
+        const studentGrades = grades.filter((g) => g.student_id === student.id);
         const avg =
           studentGrades.length > 0
             ? studentGrades.reduce((sum, g) => sum + Number(g.percentage), 0) / studentGrades.length
             : 0;
 
         return {
-          id: studentId,
-          name: profile?.full_name || 'Unknown',
-          email: profile?.email || '',
+          id: student.id,
+          name: student.name,
+          email: student.email,
           average: avg,
           assessments: studentGrades.length,
           trend: 'stable' as 'up' | 'down' | 'stable',
         };
-      });
+      }).sort((a, b) => b.average - a.average); // Sort by avg desc
 
       // Recent trends (last 7 days)
       const now = new Date();
@@ -215,22 +196,22 @@ export const useAnalytics = () => {
         const date = new Date(now);
         date.setDate(date.getDate() - i);
         const dateStr = date.toISOString().split('T')[0];
-        
-        const dayGrades = grades?.filter((g) => {
+
+        const dayGrades = grades.filter((g) => {
           const gradeDate = g.graded_at ? new Date(g.graded_at).toISOString().split('T')[0] : null;
           return gradeDate === dateStr;
-        }) || [];
-        
+        });
+
         const dayAvg = dayGrades.length > 0
           ? dayGrades.reduce((sum, g) => sum + Number(g.percentage), 0) / dayGrades.length
           : 0;
-        
+
         recentTrends.push({ date: dateStr, average: dayAvg });
       }
 
       const analyticsData: ClassAnalytics = {
-        totalStudents: studentIds.length,
-        totalAssessments: assessments?.length || 0,
+        totalStudents: students.length,
+        totalAssessments: assessments.length,
         averageScore,
         medianScore,
         highPerformers,

@@ -7,10 +7,50 @@ import { Badge } from '@/components/ui/badge';
 import { Plus, FileText, Calendar, Trash2, Edit, Loader2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
+import { ShareLessonDialog } from '@/components/lessons/ShareLessonDialog';
+import { exportToPDF, createGoogleDoc } from '@/utils/exportUtils';
+import { useToast } from '@/hooks/use-toast';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { MoreVertical, FileDown, Mail, Share2 } from 'lucide-react';
+
 const LessonsList: React.FC = () => {
   const { lessons, isLoading, deleteLesson } = useLessons();
+  const [shareLesson, setShareLesson] = React.useState<{ id: string, title: string } | null>(null);
+  const { toast } = useToast();
 
-  const statusColors = {
+  const handleExportPDF = (lesson: any) => {
+    const success = exportToPDF(lesson);
+    if (success) {
+      toast({ title: 'PDF Downloaded', description: 'Lesson plan exported successfully.' });
+    } else {
+      toast({ title: 'Export Failed', description: 'Could not generate PDF.', variant: 'destructive' });
+    }
+  };
+
+  const handleGoogleDoc = async (lesson: any) => {
+    toast({ title: "Creating Doc...", description: "Please wait." });
+    const result = await createGoogleDoc(lesson);
+    if (!result.success && result.authUrl) {
+      window.location.href = `${result.authUrl}`;
+    } else if (result.success) {
+      toast({
+        title: 'Google Doc Created',
+        description: 'Document opened in new tab.'
+      });
+      if (result.url) window.open(result.url, '_blank');
+    } else {
+      toast({ title: 'Error', description: result.message, variant: 'destructive' });
+    }
+  };
+
+  const statusColors: Record<string, string> = {
     draft: 'bg-warning/10 text-warning border-warning/20',
     published: 'bg-success/10 text-success border-success/20',
     archived: 'bg-muted text-muted-foreground border-muted',
@@ -57,7 +97,9 @@ const LessonsList: React.FC = () => {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-2">
-                      <h3 className="font-semibold text-lg truncate">{lesson.title}</h3>
+                      <Link to={`/teacher/lessons/${lesson.id}`} className="hover:underline">
+                        <h3 className="font-semibold text-lg truncate">{lesson.title}</h3>
+                      </Link>
                       <Badge variant="outline" className={statusColors[lesson.status]}>
                         {lesson.status}
                       </Badge>
@@ -72,18 +114,37 @@ const LessonsList: React.FC = () => {
                       Updated {formatDistanceToNow(new Date(lesson.updated_at), { addSuffix: true })}
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm">
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => deleteLesson(lesson.id)}
-                      className="text-destructive hover:bg-destructive/10"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+
+                  <div className="flex gap-2 items-center">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => handleExportPDF(lesson)}>
+                          <FileDown className="h-4 w-4 mr-2" /> Download PDF
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleGoogleDoc(lesson)}>
+                          <FileText className="h-4 w-4 mr-2" /> Create Google Doc
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setShareLesson({ id: lesson.id, title: lesson.title })}>
+                          <Mail className="h-4 w-4 mr-2" /> Share via Email
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-destructive" onClick={() => deleteLesson(lesson.id)}>
+                          <Trash2 className="h-4 w-4 mr-2" /> Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    <Link to={`/teacher/lessons/edit/${lesson.id}`}>
+                      <Button variant="outline" size="sm">
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    </Link>
                   </div>
                 </div>
               </CardContent>
@@ -91,8 +152,16 @@ const LessonsList: React.FC = () => {
           ))}
         </div>
       )}
+
+      {shareLesson && (
+        <ShareLessonDialog
+          open={!!shareLesson}
+          onOpenChange={(open) => !open && setShareLesson(null)}
+          lessonId={shareLesson.id}
+          lessonTitle={shareLesson.title}
+        />
+      )}
     </div>
   );
 };
-
 export default LessonsList;

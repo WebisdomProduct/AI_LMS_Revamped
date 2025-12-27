@@ -17,6 +17,24 @@ import CreateLesson from "./pages/teacher/CreateLesson";
 import AssessmentsList from "./pages/teacher/AssessmentsList";
 import Analytics from "./pages/teacher/Analytics";
 import Gradebook from "./pages/teacher/Gradebook";
+import Schedule from "./pages/teacher/Schedule";
+import Settings from "./pages/teacher/Settings";
+import ViewLesson from "./pages/teacher/ViewLesson";
+import EditLesson from "./pages/teacher/EditLesson";
+import CreateAssessment from "./pages/teacher/CreateAssessment";
+import ViewAssessment from "./pages/teacher/ViewAssessment";
+import EditAssessment from "./pages/teacher/EditAssessment";
+
+import Students from "./pages/teacher/Students";
+
+// Student Pages
+import StudentLayout from "./components/layout/StudentLayout";
+import StudentDashboard from "./pages/student/StudentDashboard";
+import StudentAssignment from "./pages/student/StudentAssignment";
+import AITutor from "./pages/student/AITutor";
+import StudentGrade from "./pages/student/StudentGrade";
+import StudentProfile from "./pages/student/StudentProfile";
+import StudyPlan from "./pages/student/StudyPlan";
 
 const queryClient = new QueryClient();
 
@@ -82,9 +100,17 @@ const AppRoutes = () => {
         <Route index element={<TeacherDashboard />} />
         <Route path="lessons" element={<LessonsList />} />
         <Route path="lessons/create" element={<CreateLesson />} />
+        <Route path="lessons/:id" element={<ViewLesson />} />
+        <Route path="lessons/edit/:id" element={<EditLesson />} />
         <Route path="assessments" element={<AssessmentsList />} />
+        <Route path="assessments/create" element={<CreateAssessment />} />
+        <Route path="assessments/:id" element={<ViewAssessment />} />
+        <Route path="assessments/:id/edit" element={<EditAssessment />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="gradebook" element={<Gradebook />} />
+        <Route path="schedule" element={<Schedule />} />
+        <Route path="settings" element={<Settings />} />
+        <Route path="students" element={<Students />} />
       </Route>
 
       {/* Placeholder routes for Student and Admin */}
@@ -92,15 +118,18 @@ const AppRoutes = () => {
         path="/student"
         element={
           <ProtectedRoute allowedRoles={["student"]}>
-            <div className="min-h-screen flex items-center justify-center bg-background">
-              <div className="text-center">
-                <h1 className="text-3xl font-bold mb-4">Student Dashboard</h1>
-                <p className="text-muted-foreground">Coming soon...</p>
-              </div>
-            </div>
+            <StudentLayout />
           </ProtectedRoute>
         }
-      />
+      >
+        <Route index element={<StudentDashboard />} />
+        <Route path="assignments" element={<StudentAssignment />} />
+        <Route path="assignments/:id" element={<StudentAssignment />} />
+        <Route path="tutor" element={<AITutor />} />
+        <Route path="grades" element={<StudentGrade />} />
+        <Route path="study-plan" element={<StudyPlan />} />
+        <Route path="profile" element={<StudentProfile />} />
+      </Route>
 
       <Route
         path="/admin"

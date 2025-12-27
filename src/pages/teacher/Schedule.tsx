@@ -123,7 +123,7 @@ const Schedule: React.FC = () => {
             date: event.start.split('T')[0],
             startTime: event.start.split('T')[1].substring(0, 5),
             endTime: event.end.split('T')[1].substring(0, 5),
-            category: event.category as any,
+            category: event.category as 'lecture' | 'meeting' | 'holiday' | 'school-event' | 'personal',
             meetingLink: event.meetingLink || '',
             description: event.description || ''
         });
@@ -257,7 +257,7 @@ const Schedule: React.FC = () => {
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Category</Label>
-                                        <Select value={formData.category} onValueChange={(v: any) => setFormData({ ...formData, category: v })}>
+                                        <Select value={formData.category} onValueChange={(v: string) => setFormData({ ...formData, category: v as 'lecture' | 'meeting' | 'holiday' | 'school-event' | 'personal' })}>
                                             <SelectTrigger>
                                                 <SelectValue />
                                             </SelectTrigger>
@@ -432,7 +432,7 @@ const Schedule: React.FC = () => {
                                                                 </div>
                                                                 <div className="space-y-2">
                                                                     <Label>Category</Label>
-                                                                    <Select value={formData.category} onValueChange={(v: any) => setFormData({ ...formData, category: v })}>
+                                                                    <Select value={formData.category} onValueChange={(v: string) => setFormData({ ...formData, category: v as 'lecture' | 'meeting' | 'holiday' | 'school-event' | 'personal' })}>
                                                                         <SelectTrigger>
                                                                             <SelectValue />
                                                                         </SelectTrigger>

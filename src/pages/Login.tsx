@@ -13,11 +13,11 @@ import { GraduationCap, BookOpen, Shield, Loader2, Eye, EyeOff } from 'lucide-re
 const Login: React.FC = () => {
   const navigate = useNavigate();
   const { user, session, signIn, signUp, isLoading: authLoading } = useAuth();
-  
+
   const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -93,19 +93,19 @@ const Login: React.FC = () => {
       <div className="lg:w-1/2 sidebar-gradient p-8 lg:p-12 flex flex-col justify-center text-white">
         <div className="max-w-lg mx-auto animate-fade-in">
           <div className="flex items-center gap-3 mb-8">
-            <div className="h-12 w-12 rounded-xl bg-white/10 backdrop-blur flex items-center justify-center">
-              <GraduationCap className="h-7 w-7 text-accent" />
+            <div className="h-12 w-12 rounded-xl bg-white/10 backdrop-blur flex items-center justify-center overflow-hidden p-2">
+              <img src="/logo.png" alt="EduSpark AI Logo" className="h-full w-full object-contain" />
             </div>
-            <h1 className="text-3xl font-bold">EduLearn LMS</h1>
+            <h1 className="text-3xl font-bold">EduSpark AI</h1>
           </div>
-          
+
           <h2 className="text-4xl lg:text-5xl font-bold mb-6 leading-tight">
             Transform Teaching with{' '}
             <span className="text-accent">AI-Powered</span> Learning
           </h2>
-          
+
           <p className="text-lg text-white/80 mb-8 leading-relaxed">
-            Create engaging lesson plans, personalized assessments, and insightful analytics 
+            Create engaging lesson plans, personalized assessments, and insightful analytics
             — all powered by advanced AI to save you time and enhance student outcomes.
           </p>
 

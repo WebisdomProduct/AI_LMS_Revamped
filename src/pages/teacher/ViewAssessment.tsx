@@ -95,7 +95,7 @@ const ViewAssessment: React.FC = () => {
                     </div>
                     <CardTitle className="text-3xl font-bold">{assessment.title}</CardTitle>
                     <CardDescription className="text-base">
-                        {assessment.topic} • {assessment.type.toUpperCase()} • {assessment.difficulty.toUpperCase()}
+                        {assessment.topic} • {(assessment.type || 'quiz').toUpperCase()} • {(assessment.difficulty || 'medium').toUpperCase()}
                     </CardDescription>
                     <div className="flex flex-wrap gap-6 mt-4">
                         <div className="flex items-center gap-2">

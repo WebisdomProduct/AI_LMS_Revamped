@@ -15,7 +15,8 @@ import {
     ChevronDown,
     BrainCircuit,
     Mic,
-    Trophy
+    Trophy,
+    CheckCircle2
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -31,6 +32,14 @@ import {
     SelectTrigger,
     SelectValue
 } from '@/components/ui/select';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
 
 interface Message {
     id: string;
@@ -56,11 +65,28 @@ const AITutor: React.FC = () => {
     const [topic, setTopic] = useState('Fractions');
     const scrollRef = useRef<HTMLDivElement>(null);
 
+    const [studentProfile, setStudentProfile] = useState<any>(null);
+
     useEffect(() => {
         if (scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
     }, [messages]);
+
+    useEffect(() => {
+        const fetchProfile = async () => {
+            if (user) {
+                try {
+                    const res = await fetch(`/api/students/user/${user.id}`);
+                    const { data } = await res.json();
+                    setStudentProfile(data);
+                } catch (e) {
+                    console.error("Profile fetch error", e);
+                }
+            }
+        };
+        fetchProfile();
+    }, [user]);
 
     const handleSend = async () => {
         if (!input.trim() || isLoading) return;
@@ -76,15 +102,22 @@ const AITutor: React.FC = () => {
         setInput('');
         setIsLoading(true);
 
-        try {
-            const context = {
-                grade: 'Grade 5',
-                subject: subject,
-                topic: topic
-            };
 
-            const history = messages.map(m => ({ role: m.role, content: m.content }));
-            const response = await getTutorResponse(userMessage.content, history, context);
+        try {
+            if (!studentProfile) throw new Error("Student profile loading...");
+
+            const res = await fetch('/api/ai/tutor', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    student_id: studentProfile.id,
+                    message: userMessage.content,
+                    grade: studentProfile.grade || 'Grade 5',
+                    subject: subject
+                })
+            });
+            const data = await res.json();
+            const response = data.reply || "Sorry, I couldn't get a response.";
 
             const aiMessage: Message = {
                 id: (Date.now() + 1).toString(),
@@ -254,9 +287,9 @@ const AITutor: React.FC = () => {
                                 <BookOpen className="h-3 w-3 mr-2 shrink-0 text-student" />
                                 Give me a practice problem
                             </Button>
-                            <Button variant="outline" className="w-full justify-start text-xs border-student/10 hover:bg-student/5 text-left h-auto py-2 leading-tight" onClick={() => setInput("Why is this topic important for CBSE Grade 5?")}>
-                                <HelpCircle className="h-3 w-3 mr-2 shrink-0 text-student" />
-                                Why is this topic important?
+                            <Button variant="outline" className="w-full justify-start text-xs border-student/10 hover:bg-student/5 text-left h-auto py-2 leading-tight" onClick={() => setInput("Give me 3 short practice questions on " + topic)}>
+                                <BrainCircuit className="h-3 w-3 mr-2 shrink-0 text-student" />
+                                Embedded Practice (Quiz)
                             </Button>
                         </CardContent>
                     </Card>
@@ -272,14 +305,64 @@ const AITutor: React.FC = () => {
                             <div className="space-y-1">
                                 <div className="flex justify-between text-[10px] font-bold uppercase">
                                     <span>Tutor Mastery</span>
-                                    <span>65%</span>
+                                    <span>{Math.min(100, messages.length * 5)}%</span>
                                 </div>
-                                <Progress value={65} className="h-1.5 bg-white/20" />
+                                <Progress value={Math.min(100, messages.length * 5)} className="h-1.5 bg-white/20" />
                             </div>
                             <p className="text-[10px] text-white/70 italic leading-relaxed">
-                                "You've asked 12 great questions this week! Keep going to earn the 'Curious Learner' badge."
+                                "You've asked {messages.filter(m => m.role === 'user').length} great questions! Keep going to earn the 'Curious Learner' badge."
                             </p>
-                            <Button variant="secondary" className="w-full text-xs font-bold h-8 text-student">View Challenges</Button>
+                            <Dialog>
+                                <DialogTrigger asChild>
+                                    <Button variant="secondary" className="w-full text-xs font-bold h-8 text-student">View Challenges</Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader>
+                                        <DialogTitle>Daily Challenges</DialogTitle>
+                                        <DialogDescription>
+                                            Complete these tasks to earn badges and points!
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between border p-3 rounded-lg">
+                                            <div className="flex items-center gap-3">
+                                                <div className="bg-student/10 p-2 rounded-full text-student">
+                                                    <MessageSquare className="h-4 w-4" />
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-sm">Curious Mind</p>
+                                                    <p className="text-xs text-muted-foreground">Ask 5 questions to the AI Tutor</p>
+                                                </div>
+                                            </div>
+                                            <Badge variant="outline" className="border-student text-student">2/5</Badge>
+                                        </div>
+                                        <div className="flex items-center justify-between border p-3 rounded-lg bg-green-50 border-green-200">
+                                            <div className="flex items-center gap-3">
+                                                <div className="bg-green-100 p-2 rounded-full text-green-600">
+                                                    <CheckCircle2 className="h-4 w-4" />
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-sm">Daily Login</p>
+                                                    <p className="text-xs text-muted-foreground">Log in to the portal</p>
+                                                </div>
+                                            </div>
+                                            <Badge className="bg-green-600">Completed</Badge>
+                                        </div>
+                                        <div className="flex items-center justify-between border p-3 rounded-lg">
+                                            <div className="flex items-center gap-3">
+                                                <div className="bg-student/10 p-2 rounded-full text-student">
+                                                    <BrainCircuit className="h-4 w-4" />
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-sm">Quiz Master</p>
+                                                    <p className="text-xs text-muted-foreground">Complete one practice quiz</p>
+                                                </div>
+                                            </div>
+                                            <Badge variant="outline" className="border-student text-student">0/1</Badge>
+                                        </div>
+                                    </div>
+                                </DialogContent>
+                            </Dialog>
                         </CardContent>
                     </Card>
                 </div>

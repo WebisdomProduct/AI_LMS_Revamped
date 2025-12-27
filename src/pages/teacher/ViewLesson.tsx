@@ -60,6 +60,13 @@ const ViewLesson: React.FC = () => {
         setIsActionLoading(true);
         try {
             const result = await createGoogleDoc(lesson);
+
+            if (!result.success && result.authUrl) {
+                // Redirect for Auth
+                window.location.href = `${result.authUrl}`;
+                return;
+            }
+
             if (result.success) {
                 // Save doc ID to DB
                 await dbService.updateLesson(lesson.id, {
