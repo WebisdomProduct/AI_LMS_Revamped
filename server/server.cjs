@@ -5,7 +5,7 @@ const crypto = require('crypto');
 require('dotenv').config();
 const Groq = require('groq-sdk');
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || 'gsk_something' }); // User to provide key if missing
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 const app = express();
 const port = 3000;

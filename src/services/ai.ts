@@ -1,7 +1,7 @@
 import { Groq } from 'groq-sdk';
 
 // Configuration
-const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || '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';
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || '';
 
 // Initialize Groq client
 const groq = new Groq({ apiKey: GROQ_API_KEY, dangerouslyAllowBrowser: true });
