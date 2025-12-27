@@ -13,6 +13,16 @@ const port = 3000;
 app.use(cors());
 app.use(express.json());
 
+// Health Check (No DB)
+app.get('/api/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        env: process.env.NODE_ENV,
+        cwd: process.cwd()
+    });
+});
+
 // Global Error Handlers for debugging crash
 process.on('uncaughtException', (err) => {
     console.error('UNCAUGHT EXCEPTION:', err);
