@@ -3,30 +3,53 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
+// Debug logging for Vercel
+console.log("[DB] Initializing database module...");
+
 // Determine database path
-let dbPath = path.resolve(__dirname, 'lms.db');
+const sourceDbName = 'lms.db';
+let dbPath = path.resolve(__dirname, sourceDbName);
+
+console.log(`[DB] dirname: ${__dirname}`);
+console.log(`[DB] Resolved source dbPath: ${dbPath}`);
 
 // Vercel / Serverless Workaround:
-// The file system is read-only. We must copy the DB to /tmp (which is writable) to allow sqlite to work (create lock/wal files).
 if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
-  const tmpDbPath = path.join(os.tmpdir(), 'lms.db');
+  const tmpDbPath = path.join(os.tmpdir(), sourceDbName);
+  console.log(`[DB] Target tmp path: ${tmpDbPath}`);
 
-  // Copy the existing seeded DB file to /tmp if it doesn't exist
-  // Note: In serverless, /tmp might not persist, so we might re-copy every time or check existence.
-  // For Safety in this demo: Always copy to ensure we have the source data.
   try {
     if (fs.existsSync(dbPath)) {
+      console.log(`[DB] Source file found at ${dbPath}. Copying...`);
       fs.copyFileSync(dbPath, tmpDbPath);
-      console.log(`[DB] Copied database to writable /tmp: ${tmpDbPath}`);
+      console.log(`[DB] Successfully copied to ${tmpDbPath}`);
       dbPath = tmpDbPath;
     } else {
-      console.warn(`[DB] Source database not found at ${dbPath}, creating new empty one at ${tmpDbPath}`);
-      dbPath = tmpDbPath;
+      console.warn(`[DB] Source database NOT found at ${dbPath}. Searching alternatives...`);
+      const alternativePaths = [
+        path.join(process.cwd(), 'server', sourceDbName),
+        path.join(process.cwd(), sourceDbName),
+        path.join(__dirname, '..', 'server', sourceDbName)
+      ];
+
+      let found = false;
+      for (const altPath of alternativePaths) {
+        if (fs.existsSync(altPath)) {
+          console.log(`[DB] Found at alternative: ${altPath}. Copying...`);
+          fs.copyFileSync(altPath, tmpDbPath);
+          dbPath = tmpDbPath;
+          found = true;
+          break;
+        }
+      }
+
+      if (!found) {
+        console.error(`[DB] CRITICAL: Could not find ${sourceDbName} anywhere! Creating empty DB at ${tmpDbPath}`);
+        dbPath = tmpDbPath;
+      }
     }
   } catch (e) {
     console.error("[DB] Failed to copy DB to /tmp:", e);
-    // Fallback to memory if file copy fails
-    dbPath = ':memory:';
   }
 }
 
