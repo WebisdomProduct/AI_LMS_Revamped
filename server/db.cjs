@@ -1,13 +1,40 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 
-const dbPath = path.resolve(__dirname, 'lms.db');
+// Determine database path
+let dbPath = path.resolve(__dirname, 'lms.db');
+
+// Vercel / Serverless Workaround:
+// The file system is read-only. We must copy the DB to /tmp (which is writable) to allow sqlite to work (create lock/wal files).
+if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+  const tmpDbPath = path.join(os.tmpdir(), 'lms.db');
+
+  // Copy the existing seeded DB file to /tmp if it doesn't exist
+  // Note: In serverless, /tmp might not persist, so we might re-copy every time or check existence.
+  // For Safety in this demo: Always copy to ensure we have the source data.
+  try {
+    if (fs.existsSync(dbPath)) {
+      fs.copyFileSync(dbPath, tmpDbPath);
+      console.log(`[DB] Copied database to writable /tmp: ${tmpDbPath}`);
+      dbPath = tmpDbPath;
+    } else {
+      console.warn(`[DB] Source database not found at ${dbPath}, creating new empty one at ${tmpDbPath}`);
+      dbPath = tmpDbPath;
+    }
+  } catch (e) {
+    console.error("[DB] Failed to copy DB to /tmp:", e);
+    // Fallback to memory if file copy fails
+    dbPath = ':memory:';
+  }
+}
 
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
-    console.error('Error opening database', err.message);
+    console.error(`Error opening database at ${dbPath}:`, err.message);
   } else {
-    console.log('Connected to the SQLite database.');
+    console.log(`Connected to the SQLite database at ${dbPath}`);
   }
 });
 
