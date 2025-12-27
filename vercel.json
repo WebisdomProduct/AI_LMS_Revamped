@@ -2,11 +2,11 @@
     "rewrites": [
         {
             "source": "/api/(.*)",
-            "destination": "/api/index.cjs"
+            "destination": "/api/index.js"
         }
     ],
     "functions": {
-        "api/index.cjs": {
+        "api/index.js": {
             "includeFiles": "server/lms.db",
             "maxDuration": 10
         }
