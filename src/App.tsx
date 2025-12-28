@@ -26,6 +26,8 @@ import ViewAssessment from "./pages/teacher/ViewAssessment";
 import EditAssessment from "./pages/teacher/EditAssessment";
 
 import Students from "./pages/teacher/Students";
+import TeacherProfile from "./pages/teacher/TeacherProfile";
+
 
 // Student Pages
 import StudentLayout from "./components/layout/StudentLayout";
@@ -111,6 +113,7 @@ const AppRoutes = () => {
         <Route path="schedule" element={<Schedule />} />
         <Route path="settings" element={<Settings />} />
         <Route path="students" element={<Students />} />
+        <Route path="profile" element={<TeacherProfile />} />
       </Route>
 
       {/* Placeholder routes for Student and Admin */}

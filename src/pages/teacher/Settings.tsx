@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { User, Bell, Shield, Database, Save, Loader2, Globe, Lightbulb, Sparkles, Target, Trash2, TrendingUp, BookOpen } from 'lucide-react';
+import { User, Bell, Shield, Database, Save, Loader2, Globe, Lightbulb, Sparkles, Target, Trash2, TrendingUp, BookOpen, Trophy, FileText } from 'lucide-react';
 import { dbService } from '@/services/db';
 import { useToast } from '@/hooks/use-toast';
 import { getEducationalTrends, getSchoolPoliciesInfo, expandIdeaAssistant, askCustomQuestion } from '@/services/ai';
@@ -23,6 +23,10 @@ const Settings: React.FC = () => {
     const [expandedIdea, setExpandedIdea] = React.useState<Record<number, string>>({});
     const [customQuery, setCustomQuery] = React.useState('');
     const [isCustomQueryLoading, setIsCustomQueryLoading] = React.useState(false);
+
+    // Stats state
+    const [lessonCount, setLessonCount] = React.useState(0);
+    const [assessmentCount, setAssessmentCount] = React.useState(0);
 
     // Profile State
     const [profile, setProfile] = React.useState({
@@ -56,9 +60,24 @@ const Settings: React.FC = () => {
         }
     };
 
+    // Fetch counts on mount
+    React.useEffect(() => {
+        const fetchCounts = async () => {
+            try {
+                const { data: lessons } = await dbService.getLessons('teacher-demo-id');
+                const { data: assessments } = await dbService.getAssessments('teacher-demo-id');
+                setLessonCount(lessons?.length || 0);
+                setAssessmentCount(assessments?.length || 0);
+            } catch (error) {
+                console.error('Error fetching counts:', error);
+            }
+        };
+        fetchCounts();
+    }, []);
+
     const handleReseed = async () => {
         setIsReseeding(true);
-        await dbService.reseed(user?.id || '');
+        await dbService.reseed();
         setIsReseeding(false);
         toast({ title: 'Database Reseeded', description: 'Application data has been reset to defaults.' });
         window.location.reload();
@@ -170,13 +189,11 @@ const Settings: React.FC = () => {
 
                 {/* Profile Tab */}
                 <TabsContent value="profile" className="space-y-6">
-                    <Card className="border-border/50 shadow-sm">
-                        <CardHeader>
-                            <CardTitle>Professional Identity</CardTitle>
-                            <CardDescription>Configure how you appear to students and the academic community</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-8">
-                            <div className="flex flex-col sm:flex-row items-center gap-8 p-6 bg-muted/30 rounded-2xl border border-dashed">
+                    {/* Profile Header Card */}
+                    <Card className="border-border/50 bg-gradient-to-br from-primary/5 to-accent/5">
+                        <CardContent className="p-6">
+                            <div className="flex items-start gap-6">
+                                {/* Profile Picture */}
                                 <div className="relative group">
                                     <div className="h-32 w-32 rounded-full overflow-hidden border-4 border-background shadow-xl bg-muted flex items-center justify-center">
                                         {profile.photo ? (
@@ -192,20 +209,207 @@ const Settings: React.FC = () => {
                                         </Label>
                                         <input id="photo-upload-v2" type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
                                     </div>
-                                    <div className="absolute bottom-0 right-0 h-10 w-10 bg-primary rounded-full flex items-center justify-center border-4 border-background shadow-lg text-white">
-                                        <Save className="h-4 w-4" />
-                                    </div>
                                 </div>
-                                <div className="space-y-2 text-center sm:text-left">
-                                    <h3 className="text-xl font-bold">{profile.name}</h3>
-                                    <p className="text-muted-foreground">{profile.role}</p>
-                                    <div className="flex gap-2 justify-center sm:justify-start">
-                                        <Badge variant="secondary">Verified Teacher</Badge>
-                                        <Badge variant="outline" className="border-primary/20 text-primary">Admin Access</Badge>
+
+                                {/* Profile Info */}
+                                <div className="flex-1">
+                                    <h2 className="text-2xl font-bold mb-1">{profile.name}</h2>
+                                    <p className="text-muted-foreground mb-4">Instructor</p>
+                                    <div className="flex gap-6 text-sm">
+                                        <div className="flex items-center gap-2">
+                                            <BookOpen className="h-4 w-4 text-primary" />
+                                            <span>{lessonCount} Lesson Plans Created</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <FileText className="h-4 w-4 text-primary" />
+                                            <span>{assessmentCount} Assessments Created</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
+                        </CardContent>
+                    </Card>
 
+                    {/* Tabs for Introduction, Courses, Ratings */}
+                    <Tabs defaultValue="introduction" className="w-full">
+                        <TabsList className="grid w-full grid-cols-3">
+                            <TabsTrigger value="introduction">Introduction</TabsTrigger>
+                            <TabsTrigger value="courses">Courses</TabsTrigger>
+                            <TabsTrigger value="ratings">Ratings & Reviews</TabsTrigger>
+                        </TabsList>
+
+                        {/* Introduction Tab */}
+                        <TabsContent value="introduction" className="space-y-6 mt-6">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>About Me</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <p className="text-muted-foreground leading-relaxed">
+                                        I am passionate about making technology easy to understand. I have taught students at the Universities and guided professionals for the past 20 years.
+                                    </p>
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <BookOpen className="h-5 w-5 text-primary" />
+                                        Education
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="flex items-start gap-4 p-4 bg-muted/30 rounded-lg">
+                                        <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center shrink-0">
+                                            <BookOpen className="h-6 w-6 text-primary" />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-semibold">Masters in Computer Science</h4>
+                                            <p className="text-sm text-muted-foreground">Stanford University</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-4 p-4 bg-muted/30 rounded-lg">
+                                        <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center shrink-0">
+                                            <BookOpen className="h-6 w-6 text-primary" />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-semibold">PhD in Computer Science and Engineering</h4>
+                                            <p className="text-sm text-muted-foreground">MIT</p>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <Trophy className="h-5 w-5 text-amber-500" />
+                                        Achievements
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="flex items-start gap-4 p-4 bg-muted/30 rounded-lg">
+                                        <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-amber-500/20 to-yellow-500/20 flex items-center justify-center shrink-0">
+                                            <Trophy className="h-6 w-6 text-amber-500" />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-semibold">Microsoft Certified Solution Developer</h4>
+                                            <p className="text-sm text-muted-foreground">Professional certification in software development</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-4 p-4 bg-muted/30 rounded-lg">
+                                        <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-amber-500/20 to-yellow-500/20 flex items-center justify-center shrink-0">
+                                            <Trophy className="h-6 w-6 text-amber-500" />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-semibold">Oakridge University, Assisted Faculty</h4>
+                                            <p className="text-sm text-muted-foreground">Teaching assistant and research contributor</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-4 p-4 bg-muted/30 rounded-lg">
+                                        <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-amber-500/20 to-yellow-500/20 flex items-center justify-center shrink-0">
+                                            <Trophy className="h-6 w-6 text-amber-500" />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-semibold">Guest Lecturer at Stanford University</h4>
+                                            <p className="text-sm text-muted-foreground">Invited speaker for advanced CS courses</p>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+
+                        {/* Courses Tab */}
+                        <TabsContent value="courses" className="mt-6">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Most Popular Lesson Plan</CardTitle>
+                                    <CardDescription>Your top-performing lesson based on student engagement</CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="p-4 bg-gradient-to-br from-primary/5 to-accent/5 rounded-lg border border-primary/10">
+                                        <div className="flex items-start gap-4">
+                                            <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shrink-0">
+                                                <BookOpen className="h-6 w-6 text-white" />
+                                            </div>
+                                            <div className="flex-1">
+                                                <h4 className="font-semibold text-lg mb-1">Introduction to Mechanics</h4>
+                                                <p className="text-sm text-muted-foreground mb-2">Physics • Class 11 Science</p>
+                                                <div className="flex gap-4 text-sm">
+                                                    <div className="flex items-center gap-1">
+                                                        <User className="h-4 w-4 text-primary" />
+                                                        <span>25 Students</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                        <TrendingUp className="h-4 w-4 text-success" />
+                                                        <span>95% Completion Rate</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p className="text-sm text-muted-foreground">View all your lessons in the Lessons section.</p>
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+
+                        {/* Ratings Tab */}
+                        <TabsContent value="ratings" className="mt-6">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Ratings & Reviews</CardTitle>
+                                    <CardDescription>Student feedback on your teaching</CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-6">
+                                    {/* Overall Rating */}
+                                    <div className="flex items-center gap-6 p-4 bg-muted/30 rounded-lg">
+                                        <div className="text-center">
+                                            <div className="text-4xl font-bold text-primary">4.8</div>
+                                            <div className="text-sm text-muted-foreground">out of 5</div>
+                                            <div className="flex gap-1 mt-2">
+                                                {[1, 2, 3, 4, 5].map(i => (
+                                                    <span key={i} className="text-amber-500">★</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-sm text-muted-foreground">Based on 24 student reviews</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Individual Reviews */}
+                                    <div className="space-y-4">
+                                        {[
+                                            { name: 'Sarah Johnson', rating: 5, comment: 'Excellent teacher! Makes complex topics easy to understand.', date: '2 days ago' },
+                                            { name: 'Michael Chen', rating: 5, comment: 'Very engaging lessons with great real-world examples.', date: '1 week ago' },
+                                            { name: 'Emma Davis', rating: 4, comment: 'Good teaching style, would appreciate more practice problems.', date: '2 weeks ago' }
+                                        ].map((review, idx) => (
+                                            <div key={idx} className="p-4 border rounded-lg">
+                                                <div className="flex items-start justify-between mb-2">
+                                                    <div>
+                                                        <h5 className="font-semibold">{review.name}</h5>
+                                                        <div className="flex gap-1 text-amber-500 text-sm">
+                                                            {Array(review.rating).fill('★').join('')}
+                                                        </div>
+                                                    </div>
+                                                    <span className="text-xs text-muted-foreground">{review.date}</span>
+                                                </div>
+                                                <p className="text-sm text-muted-foreground">{review.comment}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+                    </Tabs>
+
+                    {/* Edit Profile Button */}
+                    <Card className="border-border/50 shadow-sm">
+                        <CardHeader>
+                            <CardTitle>Edit Profile Information</CardTitle>
+                            <CardDescription>Update your personal and professional details</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
                             <div className="grid md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
                                     <Label>Preferred Full Name</Label>

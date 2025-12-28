@@ -8,6 +8,7 @@ import { Plus, FileText, Calendar, Trash2, Edit, Loader2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 import { ShareLessonDialog } from '@/components/lessons/ShareLessonDialog';
+import { EmailLessonDialog } from '@/components/lessons/EmailLessonDialog';
 import { exportToPDF, createGoogleDoc } from '@/utils/exportUtils';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -23,6 +24,7 @@ import { MoreVertical, FileDown, Mail, Share2 } from 'lucide-react';
 const LessonsList: React.FC = () => {
   const { lessons, isLoading, deleteLesson } = useLessons();
   const [shareLesson, setShareLesson] = React.useState<{ id: string, title: string } | null>(null);
+  const [emailLesson, setEmailLesson] = React.useState<any | null>(null);
   const { toast } = useToast();
 
   const handleExportPDF = (lesson: any) => {
@@ -130,7 +132,7 @@ const LessonsList: React.FC = () => {
                         <DropdownMenuItem onClick={() => handleGoogleDoc(lesson)}>
                           <FileText className="h-4 w-4 mr-2" /> Create Google Doc
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setShareLesson({ id: lesson.id, title: lesson.title })}>
+                        <DropdownMenuItem onClick={() => setEmailLesson(lesson)}>
                           <Mail className="h-4 w-4 mr-2" /> Share via Email
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
@@ -159,6 +161,14 @@ const LessonsList: React.FC = () => {
           onOpenChange={(open) => !open && setShareLesson(null)}
           lessonId={shareLesson.id}
           lessonTitle={shareLesson.title}
+        />
+      )}
+
+      {emailLesson && (
+        <EmailLessonDialog
+          open={!!emailLesson}
+          onOpenChange={(open) => !open && setEmailLesson(null)}
+          lesson={emailLesson}
         />
       )}
     </div>

@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 
 import { dbService } from '@/services/db';
+import { AIInsightsDialog } from '@/components/teacher/AIInsightsDialog';
+
 
 const TeacherDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -27,6 +29,8 @@ const TeacherDashboard: React.FC = () => {
     classAverage: 0,
     recentActivity: [] // Initialize empty
   });
+  const [showInsightsDialog, setShowInsightsDialog] = React.useState(false);
+
 
   React.useEffect(() => {
     const loadStats = async () => {
@@ -210,14 +214,15 @@ const TeacherDashboard: React.FC = () => {
                 introducing more challenging problems next week.
               </p>
             </div>
-            <Link to="/teacher/analytics">
-              <Button variant="outline" className="w-full">
-                View All Insights
-              </Button>
-            </Link>
+            <Button variant="outline" className="w-full" onClick={() => setShowInsightsDialog(true)}>
+              View All Insights
+            </Button>
           </CardContent>
         </Card>
       </div>
+
+      {/* AI Insights Dialog */}
+      <AIInsightsDialog open={showInsightsDialog} onOpenChange={setShowInsightsDialog} />
     </div>
   );
 };

@@ -1,24 +1,25 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Sparkles, Save, BookOpen, GraduationCap, ArrowRight } from "lucide-react";
-import { toast } from "@/hooks/use-toast"; // Using local toast hook consistent with other files
+import { Loader2, Sparkles, Save, BookOpen, ArrowRight } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 import { useNavigate } from 'react-router-dom';
 import LessonEditor from '@/components/lessons/LessonEditor';
+import LessonContextForm from '@/components/lessons/LessonContextForm';
+import { LessonContext } from '@/types';
 
 const CreateLesson = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
-  // Form State
-  const [grade, setGrade] = useState('');
-  const [subject, setSubject] = useState('');
-  const [topic, setTopic] = useState('');
+  // Form State using LessonContext
+  const [context, setContext] = useState<LessonContext>({
+    className: '',
+    grade: '',
+    subject: '',
+    topic: ''
+  });
   const [additionalPrompt, setAdditionalPrompt] = useState('');
 
   // Editor State
@@ -26,7 +27,7 @@ const CreateLesson = () => {
   const [title, setTitle] = useState('');
 
   const handleGenerate = async () => {
-    if (!grade || !subject || !topic) {
+    if (!context.className || !context.grade || !context.subject || !context.topic) {
       toast({
         title: "Missing Fields",
         description: "Please fill in all required fields.",
@@ -40,14 +41,19 @@ const CreateLesson = () => {
       const response = await fetch('/api/ai/lesson-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ grade, subject, topic, additionalPrompt })
+        body: JSON.stringify({
+          grade: context.grade,
+          subject: context.subject,
+          topic: context.topic,
+          additionalPrompt
+        })
       });
 
       const data = await response.json();
       if (data.error) throw new Error(data.error);
 
-      setGeneratedContent(data.content); // Fixed: backend returns 'content', not 'plan'
-      setTitle(`${topic} Lesson Plan`);
+      setGeneratedContent(data.content);
+      setTitle(`${context.topic} Lesson Plan`);
       setStep(2);
       toast({
         title: "Lesson Generated",
@@ -71,12 +77,12 @@ const CreateLesson = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          teacher_id: 'teacher-demo-id', // Hardcoded for demo
+          teacher_id: 'teacher-demo-id',
           title: title,
-          class_name: 'Grade ' + grade,
-          grade,
-          subject,
-          topic,
+          class_name: context.className,
+          grade: context.grade,
+          subject: context.subject,
+          topic: context.topic,
           content: generatedContent,
           status: status
         })
@@ -109,83 +115,40 @@ const CreateLesson = () => {
       {step === 1 && (
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div className="space-y-6">
-            <Card className="border-border/50 shadow-lg">
+            <LessonContextForm context={context} onChange={setContext} />
+
+            <Card className="border-border/50">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-purple-600" />
-                  Lesson Configuration
-                </CardTitle>
-                <CardDescription>
-                  Define the parameters for your lesson.
-                </CardDescription>
+                <CardTitle>Additional Context (Optional)</CardTitle>
+                <CardDescription>Any specific requirements for this lesson?</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Grade Level</Label>
-                  <Select onValueChange={setGrade} value={grade}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Grade" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {["6", "7", "8", "9", "10", "11", "12"].map((g) => (
-                        <SelectItem key={g} value={g}>Grade {g}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Subject</Label>
-                  <Select onValueChange={setSubject} value={subject}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Subject" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {["Mathematics", "Science", "History", "Literature", "Computer Science", "Art"].map((s) => (
-                        <SelectItem key={s} value={s}>{s}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Topic</Label>
-                  <Input
-                    placeholder="e.g. Photosynthesis, World War II, Linear Equations"
-                    value={topic}
-                    onChange={(e) => setTopic(e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Additional Context (Optional)</Label>
-                  <Textarea
-                    placeholder="Any specific requirements? (e.g. 'Focus on interactive activities', 'Include a quiz')"
-                    value={additionalPrompt}
-                    onChange={(e) => setAdditionalPrompt(e.target.value)}
-                    className="h-24 resize-none"
-                  />
-                </div>
-
-                <Button
-                  className="w-full btn-gradient mt-2 py-6 text-lg"
-                  onClick={handleGenerate}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      Generating Plan...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="mr-2 h-5 w-5" />
-                      Generate Lesson Plan
-                    </>
-                  )}
-                </Button>
+              <CardContent>
+                <textarea
+                  placeholder="e.g. 'Focus on interactive activities', 'Include a quiz'"
+                  value={additionalPrompt}
+                  onChange={(e) => setAdditionalPrompt(e.target.value)}
+                  className="w-full h-24 p-3 border rounded-lg resize-none"
+                />
               </CardContent>
             </Card>
+
+            <Button
+              className="w-full btn-gradient py-6 text-lg"
+              onClick={handleGenerate}
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Generating Plan...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="mr-2 h-5 w-5" />
+                  Generate Lesson Plan
+                </>
+              )}
+            </Button>
           </div>
 
           <div className="hidden lg:flex flex-col items-center justify-center text-center space-y-6 opacity-80">

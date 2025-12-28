@@ -103,6 +103,111 @@ app.post('/api/share/lesson', async (req, res) => {
     }
 });
 
+// --- Share Lesson via Email with PDF Attachment ---
+app.post('/api/share/lesson-pdf', async (req, res) => {
+    const { lessonId, lessonTitle, lessonContent, lessonMetadata, recipients, customMessage } = req.body;
+    console.log(`[SHARE PDF] Request to share "${lessonTitle}" with PDF to:`, recipients);
+
+    if (!recipients || recipients.length === 0) {
+        return res.status(400).json({ error: 'No recipients provided' });
+    }
+
+    try {
+        // SMTP Transporter Setup
+        let transporter;
+        let isTestAccount = false;
+
+        if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+            transporter = nodemailer.createTransport({
+                host: process.env.SMTP_HOST,
+                port: process.env.SMTP_PORT || 587,
+                secure: false,
+                auth: {
+                    user: process.env.SMTP_USER,
+                    pass: process.env.SMTP_PASS
+                }
+            });
+        } else {
+            console.log('[SHARE PDF] No SMTP credentials found. Creating test account...');
+            const testAccount = await nodemailer.createTestAccount();
+            transporter = nodemailer.createTransport({
+                host: 'smtp.ethereal.email',
+                port: 587,
+                secure: false,
+                auth: { user: testAccount.user, pass: testAccount.pass }
+            });
+            isTestAccount = true;
+        }
+
+        // Create rich HTML email with lesson content (no PDF attachment)
+        const htmlContent = `
+            <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
+                <div style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); padding: 30px; border-radius: 10px 10px 0 0;">
+                    <h1 style="color: white; margin: 0;">Edu-Spark AI</h1>
+                    <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0 0;">Lesson Plan Shared</p>
+                </div>
+                
+                <div style="background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 10px 10px;">
+                    ${customMessage ? `
+                        <div style="background: #f3f4f6; padding: 15px; border-left: 4px solid #6366f1; margin-bottom: 20px;">
+                            <p style="margin: 0; font-style: italic; color: #374151;">${customMessage}</p>
+                        </div>
+                    ` : ''}
+                    
+                    <h2 style="color: #1f2937; margin-top: 0;">${lessonTitle}</h2>
+                    
+                    <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <tr>
+                                <td style="padding: 8px 0; color: #6b7280; font-weight: 600;">Subject:</td>
+                                <td style="padding: 8px 0; color: #1f2937;">${lessonMetadata.subject}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px 0; color: #6b7280; font-weight: 600;">Grade:</td>
+                                <td style="padding: 8px 0; color: #1f2937;">${lessonMetadata.grade}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px 0; color: #6b7280; font-weight: 600;">Topic:</td>
+                                <td style="padding: 8px 0; color: #1f2937;">${lessonMetadata.topic}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    
+                    <div style="margin: 30px 0;">
+                        <h3 style="color: #1f2937; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px;">Lesson Content</h3>
+                        <div style="color: #374151; line-height: 1.6; margin-top: 15px;">
+                            ${lessonContent}
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; color: #9ca3af; font-size: 12px;">
+                        <p>Sent via Edu-Spark AI - AI-Powered Education Platform</p>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const info = await transporter.sendMail({
+            from: '"Edu-Spark AI" <no-reply@eduspark.ai>',
+            to: recipients.join(', '),
+            subject: `Lesson Plan: ${lessonTitle}`,
+            text: `${customMessage || 'A lesson plan has been shared with you via Edu-Spark AI.'}\n\nLesson: ${lessonTitle}\nSubject: ${lessonMetadata.subject}\nGrade: ${lessonMetadata.grade}\nTopic: ${lessonMetadata.topic}\n\nPlease view this email in HTML format for the complete lesson content.`,
+            html: htmlContent
+        });
+
+        console.log("Message sent: %s", info.messageId);
+        console.log(`Shared "${lessonTitle}" to: ${recipients.join(', ')}`);
+
+        let previewUrl = null;
+        if (isTestAccount) previewUrl = nodemailer.getTestMessageUrl(info);
+
+        res.json({ success: true, message: 'Email sent successfully', preview: previewUrl });
+    } catch (error) {
+        console.error("Error sending email:", error);
+        res.status(500).json({ error: 'Failed to send email', details: error.message });
+    }
+});
+
 app.post('/api/login', (req, res) => {
     const { email, password } = req.body;
     db.get("SELECT * FROM users WHERE email = ? AND password = ?", [email, password], (err, row) => {
@@ -689,7 +794,59 @@ app.post('/api/ai/lesson-refine', async (req, res) => {
     }
 });
 
+// --- AI Teaching Insights ---
+app.post('/api/ai/teaching-insights', async (req, res) => {
+    const { teacherId } = req.body;
+    try {
+        const completion = await groq.chat.completions.create({
+            messages: [
+                {
+                    role: "system", content: `You are an expert educational consultant. Generate comprehensive teaching insights and recommendations.
+Return STRICT JSON format:
+{
+  "personalizedTips": [
+    {
+      "title": "Short catchy title with emoji",
+      "description": "Detailed actionable insight",
+      "category": "Engagement|Performance|Scheduling|Assessment"
+    }
+  ],
+  "globalTrends": [
+    {
+      "title": "Trend name",
+      "description": "What this trend means for teachers",
+      "source": "Research source or study name"
+    }
+  ],
+  "strategies": [
+    {
+      "title": "Strategy name",
+      "description": "How to implement this strategy",
+      "effectiveness": "Percentage like 85%",
+      "difficulty": "Easy|Medium|Hard"
+    }
+  ],
+  "recommendations": [
+    "Quick actionable tip 1",
+    "Quick actionable tip 2",
+    "Quick actionable tip 3",
+    "Quick actionable tip 4"
+  ]
+}
 
+Generate 3-4 items for each category. Make them specific, actionable, and based on current educational research.`
+                },
+                { role: "user", content: `Generate comprehensive teaching insights for teacher ${teacherId}. Include personalized tips based on typical teaching patterns, current global educational trends, proven teaching strategies, and quick actionable recommendations.` }
+            ],
+            model: "llama-3.3-70b-versatile",
+            response_format: { type: "json_object" }
+        });
+        res.json(JSON.parse(completion.choices[0]?.message?.content || "{}"));
+    } catch (error) {
+        console.error('AI Insights Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
 
 // --- Chat for Lesson Planning ---
 app.post('/api/ai/lesson-chat', async (req, res) => {
