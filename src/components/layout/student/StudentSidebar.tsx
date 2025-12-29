@@ -2,14 +2,15 @@ import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-    LayoutDashboard,
-    ClipboardList,
+    Home,
     BookOpen,
+    GraduationCap,
+    User,
     MessageSquare,
-    BarChart3,
+    Calendar,
+    Trophy,
     Settings,
     LogOut,
-    GraduationCap,
     ChevronLeft,
     ChevronRight,
 } from 'lucide-react';
@@ -29,11 +30,13 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({ isCollapsed, onToggle, 
     const navigate = useNavigate();
 
     const navItems = [
-        { icon: LayoutDashboard, label: 'Dashboard', href: '/student' },
-        { icon: ClipboardList, label: 'Assignments', href: '/student/assignments' },
-        { icon: MessageSquare, label: 'AI Tutor', href: '/student/tutor' },
-        { icon: BookOpen, label: 'My Grades', href: '/student/grades' },
-        { icon: BarChart3, label: 'Progress', href: '/student/progress' },
+        { icon: Home, label: 'Dashboard', href: '/student' },
+        { icon: BookOpen, label: 'Assignments', href: '/student/assignments' },
+        { icon: MessageSquare, label: 'AI Tutor', href: '/student/ai-tutor' },
+        { icon: Trophy, label: 'Challenges', href: '/student/challenges' },
+        { icon: GraduationCap, label: 'Grades', href: '/student/grades' },
+        { icon: Calendar, label: 'Schedule', href: '/student/schedule' },
+        { icon: User, label: 'Profile', href: '/student/profile' },
         { icon: Settings, label: 'Settings', href: '/student/settings', badge: 'Soon' },
     ];
 

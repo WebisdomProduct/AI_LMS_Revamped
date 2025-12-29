@@ -80,6 +80,7 @@ export interface Question {
   options: { text: string; isCorrect: boolean }[];
   correct_answer: string;
   marks: number;
+  explanation?: string;
 }
 
 export interface RubricItem {

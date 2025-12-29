@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { dbService } from '@/services/db';
+import * as notesService from '@/services/notesService';
+import { generateAIInsights, getDefaultInsights } from '@/services/insightsService';
 import {
     BookOpen,
     ClipboardList,
@@ -9,13 +11,19 @@ import {
     ArrowRight,
     Clock,
     Star,
-    CheckCircle2
+    CheckCircle2,
+    StickyNote,
+    Sparkles,
+    Brain,
+    Eye
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Assessment, Grade } from '@/types';
 
 const StudentDashboard: React.FC = () => {
@@ -25,6 +33,15 @@ const StudentDashboard: React.FC = () => {
     const [upcomingAssessments, setUpcomingAssessments] = useState<Assessment[]>([]);
     const [recentGrades, setRecentGrades] = useState<Grade[]>([]);
     const [loading, setLoading] = useState(true);
+    const [showNotesDialog, setShowNotesDialog] = useState(false);
+    const [showInsightsDialog, setShowInsightsDialog] = useState(false);
+
+    // Real revision notes from notesService
+    const [revisionNotes, setRevisionNotes] = useState<notesService.Note[]>([]);
+
+    // AI insights generated from student performance
+    const [aiInsights, setAiInsights] = useState<any[]>([]);
+    const [messageCount, setMessageCount] = useState(0);
 
     useEffect(() => {
         const loadDashboardData = async () => {
@@ -50,16 +67,34 @@ const StudentDashboard: React.FC = () => {
                     const gradesRes = await fetch(`/api/students/${student.id}/grades`);
                     const { data: grades } = await gradesRes.json();
                     setRecentGrades(grades?.slice(0, 3) || []);
+
+                    // Load revision notes from localStorage
+                    const notes = notesService.getNotesByPriority();
+                    setRevisionNotes(notes);
+
+                    // Generate AI insights based on student performance
+                    const insights = generateAIInsights({
+                        averageScore: analytics?.averageScore,
+                        completedAssessments: analytics?.completedAssessments,
+                        pendingAssessments: analytics?.pendingAssessments,
+                        recentGrades: grades,
+                        messageCount: messageCount
+                    });
+                    setAiInsights(insights.length > 0 ? insights : getDefaultInsights());
                 }
             } catch (error) {
                 console.error("Error loading dashboard data:", error);
+                // Load notes even if API fails
+                const notes = notesService.getNotesByPriority();
+                setRevisionNotes(notes);
+                setAiInsights(getDefaultInsights());
             } finally {
                 setLoading(false);
             }
         };
 
         loadDashboardData();
-    }, [user]);
+    }, [user, messageCount]);
 
     if (loading) {
         return (
@@ -81,7 +116,7 @@ const StudentDashboard: React.FC = () => {
                         Here's what's happening with your learning journey today.
                     </p>
                 </div>
-                <Button onClick={() => navigate('/student/tutor')} className="bg-student hover:bg-student/90 text-white gap-2">
+                <Button onClick={() => navigate('/student/ai-tutor')} className="bg-student hover:bg-student/90 text-white gap-2">
                     <Star className="h-4 w-4" />
                     Chat with AI Tutor
                 </Button>
@@ -218,6 +253,148 @@ const StudentDashboard: React.FC = () => {
                                     "Students who use the AI Tutor for at least 15 minutes before an assessment score 20% higher on average. Try it today!"
                                 </p>
                             </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Revision Notes & AI Insights */}
+            <div className="grid gap-8 md:grid-cols-2">
+                {/* Revision Notes */}
+                <Card className="border-none shadow-lg">
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="flex items-center gap-2">
+                                <StickyNote className="h-5 w-5 text-amber-500" />
+                                Revision Notes
+                            </CardTitle>
+                            <Dialog open={showNotesDialog} onOpenChange={setShowNotesDialog}>
+                                <DialogTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700">
+                                        View All <Eye className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-2xl max-h-[80vh]">
+                                    <DialogHeader>
+                                        <DialogTitle className="flex items-center gap-2">
+                                            <StickyNote className="h-5 w-5 text-amber-500" />
+                                            All Revision Notes
+                                        </DialogTitle>
+                                        <DialogDescription>
+                                            Your compiled notes from assignments, quizzes, and AI Tutor sessions
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <ScrollArea className="h-[500px] pr-4">
+                                        <div className="space-y-3">
+                                            {revisionNotes.map((note) => (
+                                                <Card key={note.id} className={`border-l-4 ${note.priority === 'high' ? 'border-l-red-500' :
+                                                    note.priority === 'medium' ? 'border-l-amber-500' :
+                                                        'border-l-blue-500'
+                                                    }`}>
+                                                    <CardContent className="pt-4">
+                                                        <div className="flex items-start justify-between mb-2">
+                                                            <Badge variant="outline" className="text-xs">{note.subject}</Badge>
+                                                            <span className="text-xs text-muted-foreground">{note.date}</span>
+                                                        </div>
+                                                        <p className="text-sm">{note.content}</p>
+                                                    </CardContent>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                    </ScrollArea>
+                                </DialogContent>
+                            </Dialog>
+                        </div>
+                        <CardDescription>Key topics to review before your next assessment</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-3">
+                            {revisionNotes.slice(0, 3).map((note) => (
+                                <div key={note.id} className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 border border-amber-100">
+                                    <div className={`h-2 w-2 rounded-full mt-1.5 flex-shrink-0 ${note.priority === 'high' ? 'bg-red-500' :
+                                        note.priority === 'medium' ? 'bg-amber-500' :
+                                            'bg-blue-500'
+                                        }`} />
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <Badge variant="outline" className="text-[10px]">{note.subject}</Badge>
+                                            <span className="text-[10px] text-muted-foreground">{note.date}</span>
+                                        </div>
+                                        <p className="text-xs text-foreground leading-relaxed">{note.content}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* AI Insights & Recommendations */}
+                <Card className="border-none shadow-lg bg-gradient-to-br from-student/5 to-accent/5">
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="flex items-center gap-2">
+                                <Sparkles className="h-5 w-5 text-student" />
+                                AI Insights
+                            </CardTitle>
+                            <Dialog open={showInsightsDialog} onOpenChange={setShowInsightsDialog}>
+                                <DialogTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="text-student hover:text-student/80">
+                                        View All <Eye className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-2xl max-h-[80vh]">
+                                    <DialogHeader>
+                                        <DialogTitle className="flex items-center gap-2">
+                                            <Sparkles className="h-5 w-5 text-student" />
+                                            All AI Insights & Recommendations
+                                        </DialogTitle>
+                                        <DialogDescription>
+                                            Personalized insights based on your learning patterns and performance
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <ScrollArea className="h-[500px] pr-4">
+                                        <div className="space-y-3">
+                                            {aiInsights.map((insight) => {
+                                                const Icon = insight.icon;
+                                                return (
+                                                    <Card key={insight.id} className="border-student/20">
+                                                        <CardContent className="pt-4">
+                                                            <div className="flex items-start gap-3">
+                                                                <div className="h-8 w-8 rounded-full bg-student/10 flex items-center justify-center flex-shrink-0">
+                                                                    <Icon className="h-4 w-4 text-student" />
+                                                                </div>
+                                                                <div className="flex-1">
+                                                                    <Badge variant="outline" className="text-[10px] mb-2 capitalize">{insight.type}</Badge>
+                                                                    <p className="text-sm leading-relaxed">{insight.content}</p>
+                                                                </div>
+                                                            </div>
+                                                        </CardContent>
+                                                    </Card>
+                                                );
+                                            })}
+                                        </div>
+                                    </ScrollArea>
+                                </DialogContent>
+                            </Dialog>
+                        </div>
+                        <CardDescription>Personalized recommendations based on your performance</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-3">
+                            {aiInsights.slice(0, 3).map((insight) => {
+                                const Icon = insight.icon;
+                                return (
+                                    <div key={insight.id} className="flex items-start gap-3 p-3 rounded-lg bg-white/50 border border-student/10">
+                                        <div className="h-8 w-8 rounded-full bg-student/10 flex items-center justify-center flex-shrink-0">
+                                            <Icon className="h-4 w-4 text-student" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <Badge variant="outline" className="text-[10px] mb-1 capitalize">{insight.type}</Badge>
+                                            <p className="text-xs leading-relaxed">{insight.content}</p>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </CardContent>
                 </Card>

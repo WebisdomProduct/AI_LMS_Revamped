@@ -3,14 +3,7 @@ import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-    LayoutDashboard,
-    ClipboardList,
-    Sparkles,
-    Trophy,
-    LogOut,
-    ChevronLeft,
-    ChevronRight,
-    GraduationCap
+    Home, BookOpen, GraduationCap, User, Sparkles, Calendar, Trophy, LogOut, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -27,11 +20,13 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({ isCollapsed, onToggle }
     const navigate = useNavigate();
 
     const navItems = [
-        { icon: LayoutDashboard, label: 'Dashboard', href: '/student' },
-        { icon: ClipboardList, label: 'My Assignments', href: '/student/assignments' },
-        { icon: Sparkles, label: 'AI Tutor', href: '/student/tutor' },
-        { icon: Trophy, label: 'My Grades', href: '/student/grades' },
-        { icon: GraduationCap, label: 'Profile', href: '/student/profile' }, // Added profile link
+        { icon: Home, label: 'Dashboard', href: '/student' },
+        { icon: BookOpen, label: 'Assignments', href: '/student/assignments' },
+        { icon: Sparkles, label: 'AI Tutor', href: '/student/ai-tutor' },
+        { icon: Trophy, label: 'Challenges', href: '/student/challenges' },
+        { icon: GraduationCap, label: 'Grades', href: '/student/grades' },
+        { icon: Calendar, label: 'Schedule', href: '/student/schedule' },
+        { icon: User, label: 'Profile', href: '/student/profile' }, // Added profile link
     ];
 
     const handleSignOut = async () => {

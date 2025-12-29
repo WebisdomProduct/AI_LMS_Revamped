@@ -1,22 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { getTutorResponse } from '@/services/ai';
+import * as notesService from '@/services/notesService';
 import {
-    MessageSquare,
-    Send,
-    User,
-    Sparkles,
-    Volume2,
-    VolumeX,
-    BookOpen,
-    HelpCircle,
-    ArrowRight,
-    Search,
-    ChevronDown,
-    BrainCircuit,
-    Mic,
-    Trophy,
-    CheckCircle2
+    MessageSquare, Send, Mic, Volume2, VolumeX, Target, Trophy, Sparkles,
+    TrendingUp, Award, Loader2, Plus, BrainCircuit, BookmarkPlus, StickyNote,
+    CheckCircle2, HelpCircle, BookOpen
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,6 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { useToast } from '@/hooks/use-toast';
 import {
     Select,
     SelectContent,
@@ -40,6 +31,9 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 
 interface Message {
     id: string;
@@ -50,6 +44,7 @@ interface Message {
 
 const AITutor: React.FC = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [messages, setMessages] = useState<Message[]>([
         {
             id: '1',
@@ -64,8 +59,27 @@ const AITutor: React.FC = () => {
     const [subject, setSubject] = useState('Science');
     const [topic, setTopic] = useState('Fractions');
     const scrollRef = useRef<HTMLDivElement>(null);
+    const { toast } = useToast();
 
     const [studentProfile, setStudentProfile] = useState<any>(null);
+    const [dailyTasks, setDailyTasks] = useState([
+        { id: 1, title: 'Curious Mind', description: 'Ask 5 questions to the AI Tutor', completed: false, progress: 0, target: 5, icon: MessageSquare },
+        { id: 2, title: 'Daily Login', description: 'Log in to the portal', completed: true, progress: 1, target: 1, icon: CheckCircle2 },
+        { id: 3, title: 'Quiz Master', description: 'Complete one practice quiz', completed: false, progress: 0, target: 1, icon: BrainCircuit }
+    ]);
+    const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
+    const [isCreatingGoal, setIsCreatingGoal] = useState(false);
+
+    // Notes state - initialize from notesService
+    const [notes, setNotes] = useState<notesService.Note[]>([]);
+    const [currentNote, setCurrentNote] = useState('');
+    const [noteSubject, setNoteSubject] = useState('General');
+
+    // Load notes from localStorage on mount
+    useEffect(() => {
+        const loadedNotes = notesService.getNotes();
+        setNotes(loadedNotes);
+    }, []);
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -138,6 +152,131 @@ const AITutor: React.FC = () => {
             console.error("Tutor Error:", error);
         } finally {
             setIsLoading(false);
+        }
+
+        // Update task progress
+        setDailyTasks(prev => prev.map(task =>
+            task.id === 1 ? { ...task, progress: Math.min(task.target, task.progress + 1), completed: task.progress + 1 >= task.target } : task
+        ));
+    };
+
+    const handleTaskClick = (task: any) => {
+        if (task.completed) return;
+
+        if (task.id === 1) {
+            // Curious Mind - prompt to ask a question
+            toast({ title: 'Keep Asking!', description: `Ask ${task.target - task.progress} more questions to complete this task.` });
+        } else if (task.id === 3) {
+            // Quiz Master - generate a quiz
+            generateAIQuiz();
+        }
+    };
+
+    const generateAIQuiz = async () => {
+        setIsGeneratingQuiz(true);
+        try {
+            const response = await fetch('/api/ai/generate-quiz', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ subject, topic, questionCount: 3 })
+            });
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+
+            // Add quiz to chat
+            const quizMessage: Message = {
+                id: Date.now().toString(),
+                role: 'assistant',
+                content: data.quiz,
+                timestamp: new Date()
+            };
+            setMessages(prev => [...prev, quizMessage]);
+
+            // Update task
+            setDailyTasks(prev => prev.map(task =>
+                task.id === 3 ? { ...task, progress: 1, completed: true } : task
+            ));
+
+            toast({ title: 'Quiz Generated!', description: 'Complete the quiz below to test your knowledge.' });
+        } catch (error: any) {
+            toast({ title: 'Generation Failed', description: error.message, variant: 'destructive' });
+        } finally {
+            setIsGeneratingQuiz(false);
+        }
+    };
+
+    const createAIGoal = async () => {
+        setIsCreatingGoal(true);
+        try {
+            const response = await fetch('/api/ai/create-goal', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ subject, topic, studentLevel: studentProfile?.grade || 'Grade 5' })
+            });
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+
+            // Add new goal to tasks
+            const newGoal = {
+                id: dailyTasks.length + 1,
+                title: data.goal.title,
+                description: data.goal.description,
+                completed: false,
+                progress: 0,
+                target: data.goal.target || 1,
+                icon: Target
+            };
+            setDailyTasks(prev => [...prev, newGoal]);
+
+            toast({ title: 'Goal Created!', description: 'New learning goal added to your tasks.' });
+        } catch (error: any) {
+            toast({ title: 'Creation Failed', description: error.message, variant: 'destructive' });
+        } finally {
+            setIsCreatingGoal(false);
+        }
+    };
+
+    const saveNote = () => {
+        if (!currentNote.trim()) return;
+
+        try {
+            const newNote = notesService.saveNote({
+                content: currentNote,
+                subject: noteSubject,
+                date: new Date().toLocaleDateString(),
+                source: 'ai-tutor'
+            });
+
+            setNotes(prev => [newNote, ...prev]);
+            setCurrentNote('');
+            toast({ title: 'Note Saved!', description: 'Added to your revision notes' });
+        } catch (error) {
+            toast({ title: 'Error', description: 'Failed to save note', variant: 'destructive' });
+        }
+    };
+
+    const saveMessageToNotes = (message: string) => {
+        try {
+            const newNote = notesService.saveNote({
+                content: message,
+                subject: 'AI Tutor',
+                date: new Date().toLocaleDateString(),
+                source: 'ai-tutor'
+            });
+            setNotes(prev => [newNote, ...prev]);
+            toast({ title: 'Saved to Notes!', description: 'Message added to revision notes' });
+        } catch (error) {
+            toast({ title: 'Error', description: 'Failed to save note', variant: 'destructive' });
+        }
+    };
+
+    const deleteNote = (id: number) => {
+        try {
+            notesService.deleteNote(id);
+            setNotes(prev => prev.filter(note => note.id !== id));
+            toast({ title: 'Note Deleted', description: 'The note has been removed.' });
+        } catch (error) {
+            toast({ title: 'Error', description: 'Failed to delete note', variant: 'destructive' });
         }
     };
 
@@ -312,57 +451,13 @@ const AITutor: React.FC = () => {
                             <p className="text-[10px] text-white/70 italic leading-relaxed">
                                 "You've asked {messages.filter(m => m.role === 'user').length} great questions! Keep going to earn the 'Curious Learner' badge."
                             </p>
-                            <Dialog>
-                                <DialogTrigger asChild>
-                                    <Button variant="secondary" className="w-full text-xs font-bold h-8 text-student">View Challenges</Button>
-                                </DialogTrigger>
-                                <DialogContent>
-                                    <DialogHeader>
-                                        <DialogTitle>Daily Challenges</DialogTitle>
-                                        <DialogDescription>
-                                            Complete these tasks to earn badges and points!
-                                        </DialogDescription>
-                                    </DialogHeader>
-                                    <div className="space-y-4">
-                                        <div className="flex items-center justify-between border p-3 rounded-lg">
-                                            <div className="flex items-center gap-3">
-                                                <div className="bg-student/10 p-2 rounded-full text-student">
-                                                    <MessageSquare className="h-4 w-4" />
-                                                </div>
-                                                <div>
-                                                    <p className="font-bold text-sm">Curious Mind</p>
-                                                    <p className="text-xs text-muted-foreground">Ask 5 questions to the AI Tutor</p>
-                                                </div>
-                                            </div>
-                                            <Badge variant="outline" className="border-student text-student">2/5</Badge>
-                                        </div>
-                                        <div className="flex items-center justify-between border p-3 rounded-lg bg-green-50 border-green-200">
-                                            <div className="flex items-center gap-3">
-                                                <div className="bg-green-100 p-2 rounded-full text-green-600">
-                                                    <CheckCircle2 className="h-4 w-4" />
-                                                </div>
-                                                <div>
-                                                    <p className="font-bold text-sm">Daily Login</p>
-                                                    <p className="text-xs text-muted-foreground">Log in to the portal</p>
-                                                </div>
-                                            </div>
-                                            <Badge className="bg-green-600">Completed</Badge>
-                                        </div>
-                                        <div className="flex items-center justify-between border p-3 rounded-lg">
-                                            <div className="flex items-center gap-3">
-                                                <div className="bg-student/10 p-2 rounded-full text-student">
-                                                    <BrainCircuit className="h-4 w-4" />
-                                                </div>
-                                                <div>
-                                                    <p className="font-bold text-sm">Quiz Master</p>
-                                                    <p className="text-xs text-muted-foreground">Complete one practice quiz</p>
-                                                </div>
-                                            </div>
-                                            <Badge variant="outline" className="border-student text-student">0/1</Badge>
-                                        </div>
-                                    </div>
-                                </DialogContent>
-                            </Dialog>
+                            <Button
+                                variant="secondary"
+                                className="w-full text-xs font-bold h-8 text-student"
+                                onClick={() => navigate('/student/challenges')}
+                            >
+                                View Challenges
+                            </Button>
                         </CardContent>
                     </Card>
                 </div>

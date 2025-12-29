@@ -37,6 +37,8 @@ import AITutor from "./pages/student/AITutor";
 import StudentGrade from "./pages/student/StudentGrade";
 import StudentProfile from "./pages/student/StudentProfile";
 import StudyPlan from "./pages/student/StudyPlan";
+import Challenges from "./pages/student/Challenges";
+import StudentSchedule from "./pages/student/StudentSchedule";
 
 const queryClient = new QueryClient();
 
@@ -128,10 +130,12 @@ const AppRoutes = () => {
         <Route index element={<StudentDashboard />} />
         <Route path="assignments" element={<StudentAssignment />} />
         <Route path="assignments/:id" element={<StudentAssignment />} />
-        <Route path="tutor" element={<AITutor />} />
+        <Route path="ai-tutor" element={<AITutor />} />
+        <Route path="challenges" element={<Challenges />} />
         <Route path="grades" element={<StudentGrade />} />
         <Route path="study-plan" element={<StudyPlan />} />
         <Route path="profile" element={<StudentProfile />} />
+        <Route path="schedule" element={<StudentSchedule />} />
       </Route>
 
       <Route

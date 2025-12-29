@@ -208,6 +208,161 @@ app.post('/api/share/lesson-pdf', async (req, res) => {
     }
 });
 
+// --- AI Idea Generation ---
+app.post('/api/ai/generate-idea', async (req, res) => {
+    const { prompt } = req.body;
+    console.log(`[AI IDEA] Generating idea for: "${prompt}"`);
+
+    if (!prompt) {
+        return res.status(400).json({ error: 'Prompt is required' });
+    }
+
+    try {
+        const response = await groq.chat.completions.create({
+            model: "llama-3.3-70b-versatile",
+            messages: [{
+                role: "user",
+                content: `Generate a creative and practical idea for a student about: "${prompt}". 
+                Provide a single, specific, actionable idea in 1-2 sentences. Be creative and helpful.`
+            }],
+            temperature: 0.8,
+            max_tokens: 150
+        });
+
+        const idea = response.choices[0]?.message?.content || 'Create a detailed plan and break it down into manageable steps.';
+        res.json({ idea });
+    } catch (error) {
+        console.error('AI Idea Generation Error:', error);
+        res.status(500).json({ error: 'Failed to generate idea', details: error.message });
+    }
+});
+
+// --- AI Research Topic Generation ---
+app.post('/api/ai/research-topic', async (req, res) => {
+    const { topic } = req.body;
+    console.log(`[AI RESEARCH] Generating research for: "${topic}"`);
+
+    if (!topic) {
+        return res.status(400).json({ error: 'Topic is required' });
+    }
+
+    try {
+        const response = await groq.chat.completions.create({
+            model: "llama-3.3-70b-versatile",
+            messages: [{
+                role: "user",
+                content: `Provide a comprehensive research overview for a student on the topic: "${topic}".
+                Include:
+                1. Brief introduction
+                2. Key points (3-4 main ideas)
+                3. Interesting facts
+                4. Suggested areas for further study
+                
+                Keep it educational, age-appropriate, and engaging. Limit to 300 words.`
+            }],
+            temperature: 0.7,
+            max_tokens: 500
+        });
+
+        const research = response.choices[0]?.message?.content || 'Research content could not be generated. Please try again.';
+        res.json({ research });
+    } catch (error) {
+        console.error('AI Research Generation Error:', error);
+        res.status(500).json({ error: 'Failed to generate research', details: error.message });
+    }
+});
+
+// --- AI Quiz Generation ---
+app.post('/api/ai/generate-quiz', async (req, res) => {
+    const { subject, topic, questionCount = 3 } = req.body;
+    console.log(`[AI QUIZ] Generating quiz for ${subject} - ${topic}`);
+
+    if (!subject || !topic) {
+        return res.status(400).json({ error: 'Subject and topic are required' });
+    }
+
+    try {
+        const response = await groq.chat.completions.create({
+            model: "llama-3.3-70b-versatile",
+            messages: [{
+                role: "user",
+                content: `Create a ${questionCount}-question quiz for a student on the topic of "${topic}" in ${subject}.
+                
+                Format each question as:
+                Q1. [Question]
+                a) [Option A]
+                b) [Option B]
+                c) [Option C]
+                d) [Option D]
+                Correct Answer: [Letter]
+                
+                Make the questions educational, age-appropriate, and engaging.`
+            }],
+            temperature: 0.7,
+            max_tokens: 600
+        });
+
+        const quiz = response.choices[0]?.message?.content || 'Quiz could not be generated. Please try again.';
+        res.json({ quiz });
+    } catch (error) {
+        console.error('AI Quiz Generation Error:', error);
+        res.status(500).json({ error: 'Failed to generate quiz', details: error.message });
+    }
+});
+
+// --- AI Goal Creation ---
+app.post('/api/ai/create-goal', async (req, res) => {
+    const { subject, topic, studentLevel } = req.body;
+    console.log(`[AI GOAL] Creating goal for ${subject} - ${topic} (${studentLevel})`);
+
+    if (!subject || !topic) {
+        return res.status(400).json({ error: 'Subject and topic are required' });
+    }
+
+    try {
+        const response = await groq.chat.completions.create({
+            model: "llama-3.3-70b-versatile",
+            messages: [{
+                role: "user",
+                content: `Create a personalized learning goal for a ${studentLevel} student studying "${topic}" in ${subject}.
+                
+                Provide:
+                1. A short, motivating goal title (max 5 words)
+                2. A brief description of what the student should achieve (1 sentence)
+                3. A target number (how many times they should practice/complete this)
+                
+                Format your response as JSON:
+                {
+                    "goalTitle": "...",
+                    "goalDescription": "...",
+                    "target": number
+                }`
+            }],
+            temperature: 0.7,
+            max_tokens: 200
+        });
+
+        const content = response.choices[0]?.message?.content || '{}';
+        // Try to parse JSON, fallback to default if parsing fails
+        let goalData;
+        try {
+            goalData = JSON.parse(content);
+        } catch {
+            goalData = {
+                goalTitle: `Master ${topic}`,
+                goalDescription: `Complete practice exercises on ${topic}`,
+                target: 3
+            };
+        }
+
+        res.json(goalData);
+    } catch (error) {
+        console.error('AI Goal Creation Error:', error);
+        res.status(500).json({ error: 'Failed to create goal', details: error.message });
+    }
+});
+
+// --- Login Endpoint ---
 app.post('/api/login', (req, res) => {
     const { email, password } = req.body;
     db.get("SELECT * FROM users WHERE email = ? AND password = ?", [email, password], (err, row) => {

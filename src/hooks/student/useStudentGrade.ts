@@ -86,7 +86,7 @@ export const useStudentGrades = () => {
             }
 
             setStats({
-                averageScore: analytics.averageScore,
+                averageScore: analytics?.averageScore || 0,
                 totalAssessments: studentGrades.length,
                 completedAssessments: studentGrades.length,
                 bestSubject,
