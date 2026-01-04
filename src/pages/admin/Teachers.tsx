@@ -342,20 +342,20 @@ const TeachersAdmin: React.FC = () => {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Name</TableHead>
-                                <TableHead>Email</TableHead>
-                                <TableHead>Lessons</TableHead>
-                                <TableHead>Assessments</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                                <TableHead className="whitespace-nowrap">Email</TableHead>
+                                <TableHead className="whitespace-nowrap">Lessons</TableHead>
+                                <TableHead className="whitespace-nowrap">Assessments</TableHead>
+                                <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {filteredTeachers.map((teacher) => (
                                 <TableRow key={teacher.id}>
-                                    <TableCell className="font-medium">{teacher.full_name}</TableCell>
-                                    <TableCell>{teacher.email}</TableCell>
-                                    <TableCell>{teacher.lessons_count}</TableCell>
-                                    <TableCell>{teacher.assessments_count}</TableCell>
-                                    <TableCell className="text-right">
+                                    <TableCell className="font-medium min-w-[150px]">{teacher.full_name}</TableCell>
+                                    <TableCell className="whitespace-nowrap">{teacher.email}</TableCell>
+                                    <TableCell className="whitespace-nowrap">{teacher.lessons_count}</TableCell>
+                                    <TableCell className="whitespace-nowrap">{teacher.assessments_count}</TableCell>
+                                    <TableCell className="text-right whitespace-nowrap">
                                         <div className="flex justify-end gap-2">
                                             <Button
                                                 variant="ghost"

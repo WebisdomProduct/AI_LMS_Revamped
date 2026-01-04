@@ -266,11 +266,11 @@ const Gradebook: React.FC = () => {
                         />
                       </TableHead>
                       <TableHead>Student Name</TableHead>
-                      <TableHead>Class</TableHead>
-                      <TableHead>Assessments Taken</TableHead>
-                      <TableHead>Average Score</TableHead>
-                      <TableHead>Grade</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="whitespace-nowrap">Class</TableHead>
+                      <TableHead className="whitespace-nowrap">Assessments Taken</TableHead>
+                      <TableHead className="whitespace-nowrap">Average Score</TableHead>
+                      <TableHead className="whitespace-nowrap">Grade</TableHead>
+                      <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -286,19 +286,18 @@ const Gradebook: React.FC = () => {
                             onClick={(e) => e.stopPropagation()}
                           />
                         </TableCell>
-                        <TableCell
-                          className="font-medium"
+                        <TableCell className="font-medium min-w-[150px]"
                           onClick={() => setSelectedStudent(grade)}
                         >
                           {grade.student_name}
                         </TableCell>
-                        <TableCell onClick={() => setSelectedStudent(grade)}>
+                        <TableCell className="whitespace-nowrap" onClick={() => setSelectedStudent(grade)}>
                           Grade 5
                         </TableCell>
-                        <TableCell onClick={() => setSelectedStudent(grade)}>
+                        <TableCell className="whitespace-nowrap" onClick={() => setSelectedStudent(grade)}>
                           {grade.completed_assessments || 0}
                         </TableCell>
-                        <TableCell onClick={() => setSelectedStudent(grade)}>
+                        <TableCell className="whitespace-nowrap" onClick={() => setSelectedStudent(grade)}>
                           {grade.average_score?.toFixed(1) || 0}%
                         </TableCell>
                         <TableCell onClick={() => setSelectedStudent(grade)}>
@@ -364,10 +363,10 @@ const Gradebook: React.FC = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Student</TableHead>
-                      <TableHead>Submitted</TableHead>
-                      <TableHead>Score</TableHead>
-                      <TableHead>Grade</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="whitespace-nowrap">Submitted</TableHead>
+                      <TableHead className="whitespace-nowrap">Score</TableHead>
+                      <TableHead className="whitespace-nowrap">Grade</TableHead>
+                      <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -375,11 +374,11 @@ const Gradebook: React.FC = () => {
                       const grade = grades.find(g => g.student_id === submission.student_id && g.assessment_id === submission.assessment_id);
                       return (
                         <TableRow key={submission.id}>
-                          <TableCell className="font-medium">{submission.student_id || 'Unknown'}</TableCell>
-                          <TableCell>
+                          <TableCell className="font-medium min-w-[150px]">{submission.student_id || 'Unknown'}</TableCell>
+                          <TableCell className="whitespace-nowrap">
                             {submission.submitted_at ? new Date(submission.submitted_at).toLocaleDateString() : 'Not submitted'}
                           </TableCell>
-                          <TableCell>{grade?.total_score || 0}/100</TableCell>
+                          <TableCell className="whitespace-nowrap">{grade?.total_score || 0}/100</TableCell>
                           <TableCell>
                             {grade && (
                               <Badge className={getGradeColor(grade.percentage)}>

@@ -106,7 +106,7 @@ const TeacherDashboard: React.FC = () => {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat, i) => (
           <Card
             key={stat.label}
@@ -131,7 +131,7 @@ const TeacherDashboard: React.FC = () => {
       {/* Quick Actions */}
       <div>
         <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {quickActions.map((action, i) => (
             <Link key={action.title} to={action.href}>
               <Card
@@ -160,7 +160,7 @@ const TeacherDashboard: React.FC = () => {
       </div>
 
       {/* Recent Activity & Tips */}
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Activity */}
         <Card className="border-border/50">
           <CardHeader>

@@ -84,7 +84,7 @@ const AdminDashboard: React.FC = () => {
             </div>
 
             {/* Stats Grid */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
                 {statCards.map((stat) => (
                     <Card key={stat.title} className="card-hover">
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -106,7 +106,7 @@ const AdminDashboard: React.FC = () => {
                     <CardTitle>Quick Actions</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <a href="/admin/teachers" className="p-4 border rounded-lg hover:bg-accent transition-colors">
                             <GraduationCap className="h-6 w-6 mb-2 text-primary" />
                             <h3 className="font-semibold">Manage Teachers</h3>

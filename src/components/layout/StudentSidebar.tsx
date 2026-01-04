@@ -49,7 +49,7 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({ isCollapsed, onToggle, 
     return (
         <aside
             className={cn(
-                'fixed left-0 top-0 z-40 h-screen border-r border-sidebar-border transition-all duration-300',
+                'fixed left-0 top-0 z-[60] h-screen border-r border-sidebar-border transition-all duration-300',
                 'bg-gradient-to-b from-green-500 via-green-500/95 to-teal-500', // Vibrant student gradient
                 // Desktop
                 'hidden lg:block',

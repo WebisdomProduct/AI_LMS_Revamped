@@ -53,7 +53,7 @@ const AdminLayout: React.FC = () => {
 
             {/* Sidebar */}
             <aside className={cn(
-                'fixed left-0 top-0 z-40 h-screen border-r border-border/50 transition-all duration-300',
+                'fixed left-0 top-0 z-[60] h-screen border-r border-border/50 transition-all duration-300',
                 'bg-gradient-to-b from-purple-600 via-purple-600/95 to-pink-600', // Vibrant admin gradient
                 // Desktop
                 'hidden lg:flex flex-col',

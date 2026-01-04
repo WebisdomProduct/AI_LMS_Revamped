@@ -257,24 +257,24 @@ const StudentsAdmin: React.FC = () => {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Name</TableHead>
-                                <TableHead>Email</TableHead>
-                                <TableHead>Grade</TableHead>
-                                <TableHead>Class</TableHead>
-                                <TableHead>Avg Grade</TableHead>
-                                <TableHead>Submissions</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                                <TableHead className="whitespace-nowrap">Email</TableHead>
+                                <TableHead className="whitespace-nowrap">Grade</TableHead>
+                                <TableHead className="whitespace-nowrap">Class</TableHead>
+                                <TableHead className="whitespace-nowrap">Avg Grade</TableHead>
+                                <TableHead className="whitespace-nowrap">Submissions</TableHead>
+                                <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {filteredStudents.map((student) => (
                                 <TableRow key={student.id}>
-                                    <TableCell className="font-medium">{student.name}</TableCell>
-                                    <TableCell>{student.email}</TableCell>
-                                    <TableCell>{student.grade}</TableCell>
-                                    <TableCell>{student.class}</TableCell>
-                                    <TableCell>{student.average_grade ? `${student.average_grade.toFixed(1)}%` : 'N/A'}</TableCell>
-                                    <TableCell>{student.submissions_count || 0}</TableCell>
-                                    <TableCell className="text-right">
+                                    <TableCell className="font-medium min-w-[150px]">{student.name}</TableCell>
+                                    <TableCell className="whitespace-nowrap">{student.email}</TableCell>
+                                    <TableCell className="whitespace-nowrap">{student.grade}</TableCell>
+                                    <TableCell className="whitespace-nowrap">{student.class}</TableCell>
+                                    <TableCell className="whitespace-nowrap">{student.average_grade ? `${student.average_grade.toFixed(1)}%` : 'N/A'}</TableCell>
+                                    <TableCell className="whitespace-nowrap">{student.submissions_count || 0}</TableCell>
+                                    <TableCell className="text-right whitespace-nowrap">
                                         <div className="flex justify-end gap-2">
                                             <Button variant="ghost" size="icon" onClick={() => setEditingStudent(student)}>
                                                 <Edit className="h-4 w-4" />

@@ -185,23 +185,23 @@ const StudentDashboard: React.FC = () => {
                         <div className="space-y-4">
                             {upcomingAssessments.length > 0 ? (
                                 upcomingAssessments.map((ass) => (
-                                    <div key={ass.id} className="group flex items-center justify-between p-4 rounded-xl border border-border bg-card/50 hover:bg-student/5 hover:border-student/20 transition-all cursor-pointer" onClick={() => navigate(`/student/assignments/${ass.id}`)}>
-                                        <div className="flex items-center gap-4">
-                                            <div className="h-10 w-10 rounded-lg bg-student/10 flex items-center justify-center group-hover:bg-student text-student group-hover:text-white transition-colors">
+                                    <div key={ass.id} className="group flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-border bg-card/50 hover:bg-student/5 hover:border-student/20 transition-all cursor-pointer gap-4" onClick={() => navigate(`/student/assignments/${ass.id}`)}>
+                                        <div className="flex items-center gap-4 overflow-hidden">
+                                            <div className="h-10 w-10 rounded-lg bg-student/10 flex items-center justify-center group-hover:bg-student text-student group-hover:text-white transition-colors flex-shrink-0">
                                                 <Calendar className="h-5 w-5" />
                                             </div>
-                                            <div>
-                                                <h4 className="font-semibold text-sm group-hover:text-student transition-colors">{ass.title}</h4>
+                                            <div className="min-w-0">
+                                                <h4 className="font-semibold text-sm group-hover:text-student transition-colors truncate">{ass.title}</h4>
                                                 <div className="flex items-center gap-3 mt-1">
-                                                    <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider">{ass.subject}</Badge>
-                                                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                                        <Clock className="h-3 w-3" />
+                                                    <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider flex-shrink-0">{ass.subject}</Badge>
+                                                    <span className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                                                        <Clock className="h-3 w-3 flex-shrink-0" />
                                                         Due: {ass.due_date ? new Date(ass.due_date).toLocaleDateString() : 'No date'}
                                                     </span>
                                                 </div>
                                             </div>
                                         </div>
-                                        <Button size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity bg-student text-white">Start</Button>
+                                        <Button size="sm" className="w-full sm:w-auto opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity bg-student text-white">Start</Button>
                                     </div>
                                 ))
                             ) : (
