@@ -202,6 +202,28 @@ function initDb() {
       timestamp TEXT,
       FOREIGN KEY(student_id) REFERENCES students(id)
     )`);
+
+    // Create admin user if not exists
+    db.get(`SELECT id FROM users WHERE email = 'admin@gmail.com'`, (err, row) => {
+      if (!row) {
+        const crypto = require('crypto');
+        const adminId = crypto.randomUUID();
+        const hashedPassword = crypto.createHash('sha256').update('admin@123').digest('hex');
+
+        db.run(`INSERT INTO users (id, email, password, full_name, role) VALUES (?, ?, ?, ?, ?)`,
+          [adminId, 'admin@gmail.com', hashedPassword, 'Admin User', 'admin'],
+          (err) => {
+            if (err) {
+              console.error('Error creating admin user:', err);
+            } else {
+              console.log('[DB] Admin user created successfully');
+            }
+          }
+        );
+      } else {
+        console.log('[DB] Admin user already exists');
+      }
+    });
   });
 }
 

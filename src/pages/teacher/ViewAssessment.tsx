@@ -7,11 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, ArrowLeft, Clock, FileText, Users, CheckCircle2, AlertCircle, Edit, Trash2 } from 'lucide-react';
+import { Loader2, ArrowLeft, Clock, FileText, Users, CheckCircle2, AlertCircle, Edit, Trash2, FileDown } from 'lucide-react';
+import jsPDF from 'jspdf';
+import { useToast } from '@/hooks/use-toast';
 
 const ViewAssessment: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const { toast } = useToast();
     const [assessment, setAssessment] = useState<Assessment | null>(null);
     const [questions, setQuestions] = useState<Question[]>([]);
     const [grades, setGrades] = useState<(Grade & { student_name?: string })[]>([]);
@@ -48,6 +51,142 @@ const ViewAssessment: React.FC = () => {
         fetchAllData();
     }, [id, navigate]);
 
+    // Sanitize text for PDF to avoid junk characters
+    const sanitizeText = (text: string): string => {
+        if (!text) return '';
+        return text
+            .replace(/[^\x20-\x7E\n\r\t]/g, '') // Remove non-printable characters
+            .replace(/[\u2018\u2019]/g, "'")     // Replace smart quotes with regular quotes
+            .replace(/[\u201C\u201D]/g, '"')     // Replace smart double quotes
+            .replace(/\u2013/g, '-')             // Replace en dash
+            .replace(/\u2014/g, '--')            // Replace em dash
+            .replace(/\u2026/g, '...')           // Replace ellipsis
+            .trim();
+    };
+
+    const handleDownloadPDF = () => {
+        if (!assessment || questions.length === 0) {
+            toast({ title: 'No Questions', description: 'Cannot generate PDF without questions.', variant: 'destructive' });
+            return;
+        }
+
+        try {
+            const doc = new jsPDF();
+
+            // Header
+            doc.setFontSize(20);
+            doc.setFont("helvetica", "bold");
+            const title = sanitizeText(assessment.title || 'Assessment');
+            doc.text(title, 105, 20, { align: 'center' });
+
+            // Metadata
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Subject: ${sanitizeText(assessment.subject)}`, 20, 35);
+            doc.text(`Grade: ${sanitizeText(assessment.grade)}`, 20, 42);
+            doc.text(`Topic: ${sanitizeText(assessment.topic)}`, 20, 49);
+            if (assessment.due_date) {
+                doc.text(`Due Date: ${new Date(assessment.due_date).toLocaleDateString()}`, 20, 56);
+            }
+
+            // Instructions
+            doc.setFontSize(11);
+            doc.setFont("helvetica", "italic");
+            doc.text("Instructions: Answer all questions. Write your answers clearly.", 20, 68);
+
+            // Questions
+            let yPos = 80;
+            doc.setFont("helvetica", "normal");
+
+            questions.forEach((q, index) => {
+                // Check if we need a new page
+                if (yPos > 250) {
+                    doc.addPage();
+                    yPos = 20;
+                }
+
+                // Question number and text
+                doc.setFontSize(11);
+                doc.setFont("helvetica", "bold");
+                doc.text(`Q${index + 1}.`, 20, yPos);
+
+                doc.setFont("helvetica", "normal");
+                const sanitizedQuestion = sanitizeText(q.question_text || '');
+                const questionText = doc.splitTextToSize(sanitizedQuestion, 170);
+                doc.text(questionText, 30, yPos);
+                yPos += questionText.length * 6;
+
+                // Parse options
+                let optionsList: string[] = [];
+                if (q.options) {
+                    if (Array.isArray(q.options)) {
+                        optionsList = q.options.map((opt: any) => typeof opt === 'string' ? opt : opt.text || '');
+                    } else if (typeof q.options === 'string') {
+                        try {
+                            const parsed = JSON.parse(q.options);
+                            optionsList = Array.isArray(parsed) ? parsed.map((opt: any) => typeof opt === 'string' ? opt : opt.text || '') : [];
+                        } catch (e) {
+                            optionsList = [];
+                        }
+                    }
+                }
+
+                // Options for MCQ
+                if (q.question_type === 'mcq' && optionsList.length > 0) {
+                    doc.setFontSize(10);
+                    optionsList.forEach((option, optIndex) => {
+                        const optionLabel = String.fromCharCode(97 + optIndex); // a, b, c, d
+                        const sanitizedOption = sanitizeText(option);
+                        const optionText = doc.splitTextToSize(`${optionLabel}) ${sanitizedOption}`, 165);
+                        doc.text(optionText, 35, yPos);
+                        yPos += optionText.length * 5;
+                    });
+                }
+
+                // Answer space for written questions
+                if (q.question_type !== 'mcq') {
+                    doc.setFontSize(9);
+                    doc.setFont("helvetica", "italic");
+                    doc.text("Answer:", 35, yPos);
+                    yPos += 6;
+                    // Draw lines for answer space
+                    for (let i = 0; i < 3; i++) {
+                        doc.line(35, yPos, 190, yPos);
+                        yPos += 6;
+                    }
+                }
+
+                // Marks
+                doc.setFontSize(9);
+                doc.setFont("helvetica", "italic");
+                doc.text(`[${q.marks || 1} mark${(q.marks || 1) > 1 ? 's' : ''}]`, 190, yPos - 5, { align: 'right' });
+
+                yPos += 10; // Space between questions
+            });
+
+            // Footer
+            const totalMarks = questions.reduce((sum, q) => sum + (q.marks || 1), 0);
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "bold");
+            doc.text(`Total Marks: ${totalMarks}`, 105, yPos + 10, { align: 'center' });
+
+            doc.setFontSize(8);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(150);
+            doc.text(`Generated on ${new Date().toLocaleDateString()} via Edu-Spark AI`, 105, 285, { align: 'center' });
+
+            // Download
+            const sanitizedTitle = sanitizeText(assessment.title).replace(/\s+/g, '_');
+            const fileName = `${sanitizedTitle}_Question_Paper.pdf`;
+            doc.save(fileName);
+
+            toast({ title: 'PDF Downloaded', description: 'Assessment question paper has been downloaded.' });
+        } catch (error) {
+            console.error('PDF generation error:', error);
+            toast({ title: 'Error', description: 'Failed to generate PDF.', variant: 'destructive' });
+        }
+    };
+
     const handleDelete = async () => {
         if (!id || !window.confirm('Are you sure you want to delete this assessment? This will remove all grades and questions.')) return;
         await dbService.deleteAssessment(id);
@@ -71,6 +210,9 @@ const ViewAssessment: React.FC = () => {
                     <ArrowLeft className="h-4 w-4" /> Back to Assessments
                 </Button>
                 <div className="flex gap-2">
+                    <Button variant="outline" className="gap-2" onClick={handleDownloadPDF}>
+                        <FileDown className="h-4 w-4" /> Download PDF
+                    </Button>
                     <Link to={`/teacher/assessments/edit/${assessment.id}`}>
                         <Button variant="outline" className="gap-2">
                             <Edit className="h-4 w-4" /> Edit

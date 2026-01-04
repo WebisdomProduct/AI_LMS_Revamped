@@ -12,9 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import LessonContextForm from '@/components/lessons/LessonContextForm';
 import RubricEditor from '@/components/assessments/RubricEditor';
-import { ArrowLeft, Sparkles, Save, Loader2, Wand2 } from 'lucide-react';
+import { ArrowLeft, Sparkles, Save, Loader2, Wand2, FileDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateAssessment } from '@/services/ai';
+import jsPDF from 'jspdf';
 
 import QuestionListEditor from '@/components/assessments/QuestionListEditor';
 
@@ -40,6 +41,7 @@ const CreateAssessment: React.FC = () => {
     const [generatedAssessment, setGeneratedAssessment] = useState<any>(null);
     const [isGenerating, setIsGenerating] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [assessmentStatus, setAssessmentStatus] = useState<'draft' | 'published'>('draft');
 
     const isContextComplete = context.className && context.grade && context.subject && context.topic;
 
@@ -93,7 +95,7 @@ const CreateAssessment: React.FC = () => {
         }
     };
 
-    const handleSave = async () => {
+    const handleSave = async (status: 'draft' | 'published' = 'published') => {
         if (!generatedAssessment || !user) return;
 
         setIsSaving(true);
@@ -107,7 +109,8 @@ const CreateAssessment: React.FC = () => {
                     subject: context.subject,
                     topic: context.topic,
                     type: type,
-                    due_date: dueDate // Added Due Date
+                    due_date: dueDate,
+                    status: status // Use the status parameter
                 },
                 questions: generatedAssessment.questions.map((q: any) => ({
                     question_text: q.text,
@@ -128,7 +131,10 @@ const CreateAssessment: React.FC = () => {
             const data = await res.json();
             if (data.error) throw new Error(data.error);
 
-            toast({ title: 'Success', description: 'Assessment saved and published.' });
+            toast({
+                title: 'Success',
+                description: status === 'draft' ? 'Assessment saved as draft.' : 'Assessment published successfully.'
+            });
             navigate('/teacher/assessments');
         } catch (err: any) {
             console.error('Save error:', err);
@@ -137,6 +143,183 @@ const CreateAssessment: React.FC = () => {
             setIsSaving(false);
         }
     };
+
+    // Sanitize text for PDF to avoid junk characters
+    const sanitizeText = (text: string): string => {
+        if (!text) return '';
+        return text
+            .replace(/[^\x20-\x7E\n\r\t]/g, '') // Remove non-printable characters
+            .replace(/[\u2018\u2019]/g, "'")     // Replace smart quotes with regular quotes
+            .replace(/[\u201C\u201D]/g, '"')     // Replace smart double quotes
+            .replace(/\u2013/g, '-')             // Replace en dash
+            .replace(/\u2014/g, '--')            // Replace em dash
+            .replace(/\u2026/g, '...')           // Replace ellipsis
+            .trim();
+    };
+
+    const handleDownloadPDF = () => {
+        if (!generatedAssessment) return;
+
+        try {
+            const doc = new jsPDF();
+
+            // Header
+            doc.setFontSize(20);
+            doc.setFont("helvetica", "bold");
+            const title = sanitizeText(generatedAssessment.title || `${context.topic} Assessment`);
+            doc.text(title, 105, 20, { align: 'center' });
+
+            // Metadata
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Subject: ${sanitizeText(context.subject)}`, 20, 35);
+            doc.text(`Grade: ${sanitizeText(context.grade)}`, 20, 42);
+            doc.text(`Topic: ${sanitizeText(context.topic)}`, 20, 49);
+            if (dueDate) {
+                doc.text(`Due Date: ${new Date(dueDate).toLocaleDateString()}`, 20, 56);
+            }
+
+            // Instructions
+            doc.setFontSize(11);
+            doc.setFont("helvetica", "italic");
+            doc.text("Instructions: Answer all questions. Write your answers clearly.", 20, 68);
+
+            // Questions
+            let yPos = 80;
+            doc.setFont("helvetica", "normal");
+
+            generatedAssessment.questions.forEach((q: any, index: number) => {
+                // Check if we need a new page
+                if (yPos > 250) {
+                    doc.addPage();
+                    yPos = 20;
+                }
+
+                // Question number and text
+                doc.setFontSize(11);
+                doc.setFont("helvetica", "bold");
+                doc.text(`Q${index + 1}.`, 20, yPos);
+
+                doc.setFont("helvetica", "normal");
+                const sanitizedQuestion = sanitizeText(q.text || '');
+                const questionText = doc.splitTextToSize(sanitizedQuestion, 170);
+                doc.text(questionText, 30, yPos);
+                yPos += questionText.length * 6;
+
+                // Options for MCQ
+                if (q.type === 'mcq' && q.options && q.options.length > 0) {
+                    doc.setFontSize(10);
+                    q.options.forEach((option: string, optIndex: number) => {
+                        const optionLabel = String.fromCharCode(97 + optIndex); // a, b, c, d
+                        const sanitizedOption = sanitizeText(option);
+                        const optionText = doc.splitTextToSize(`${optionLabel}) ${sanitizedOption}`, 165);
+                        doc.text(optionText, 35, yPos);
+                        yPos += optionText.length * 5;
+                    });
+                }
+
+                // Answer space for written questions
+                if (q.type !== 'mcq') {
+                    doc.setFontSize(9);
+                    doc.setFont("helvetica", "italic");
+                    doc.text("Answer:", 35, yPos);
+                    yPos += 6;
+                    // Draw lines for answer space
+                    for (let i = 0; i < 3; i++) {
+                        doc.line(35, yPos, 190, yPos);
+                        yPos += 6;
+                    }
+                }
+
+                // Marks
+                doc.setFontSize(9);
+                doc.setFont("helvetica", "italic");
+                doc.text(`[${q.points || 1} mark${(q.points || 1) > 1 ? 's' : ''}]`, 190, yPos - 5, { align: 'right' });
+
+                yPos += 10; // Space between questions
+            });
+
+            // Footer
+            const totalMarks = generatedAssessment.questions.reduce((sum: number, q: any) => sum + (q.points || 1), 0);
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "bold");
+            doc.text(`Total Marks: ${totalMarks}`, 105, yPos + 10, { align: 'center' });
+
+            doc.setFontSize(8);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(150);
+            doc.text(`Generated on ${new Date().toLocaleDateString()} via Edu-Spark AI`, 105, 285, { align: 'center' });
+
+            // Download
+            const sanitizedTitle = sanitizeText(generatedAssessment.title).replace(/\s+/g, '_');
+            const fileName = `${sanitizedTitle}_Question_Paper.pdf`;
+            doc.save(fileName);
+
+            toast({ title: 'PDF Downloaded', description: 'Assessment question paper has been downloaded.' });
+        } catch (error) {
+            console.error('PDF generation error:', error);
+            toast({ title: 'Error', description: 'Failed to generate PDF.', variant: 'destructive' });
+        }
+    };
+
+    // Combined function: Save as Draft AND Download PDF
+    const handleSaveDraftAndDownload = async () => {
+        if (!generatedAssessment || !user) return;
+
+        setIsSaving(true);
+        try {
+            // First, save as draft
+            const payload = {
+                assessment: {
+                    teacher_id: "teacher-demo-id",
+                    title: generatedAssessment.title || `${context.topic} Assessment`,
+                    class_name: context.className,
+                    grade: context.grade,
+                    subject: context.subject,
+                    topic: context.topic,
+                    type: type,
+                    due_date: dueDate,
+                    status: 'draft'
+                },
+                questions: generatedAssessment.questions.map((q: any) => ({
+                    question_text: q.text,
+                    question_type: q.type || 'mcq',
+                    options: q.options || [],
+                    correct_answer: q.correctAnswer,
+                    marks: q.points || 1
+                })),
+                rubric: generatedAssessment.rubric
+            };
+
+            const res = await fetch('/api/assessments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+
+            // Then, download PDF
+            handleDownloadPDF();
+
+            toast({
+                title: 'Success',
+                description: 'Assessment saved as draft and PDF downloaded.'
+            });
+
+            // Navigate after a short delay to allow download to complete
+            setTimeout(() => {
+                navigate('/teacher/assessments');
+            }, 500);
+        } catch (err: any) {
+            console.error('Save error:', err);
+            toast({ title: 'Save Failed', description: err.message, variant: 'destructive' });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
 
     return (
         <div className="space-y-6 animate-fade-in max-w-5xl mx-auto mb-10">
@@ -153,10 +336,20 @@ const CreateAssessment: React.FC = () => {
                 </div>
                 <div className="flex gap-2">
                     {generatedAssessment && (
-                        <Button onClick={handleSave} disabled={isSaving} className="btn-gradient">
-                            {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                            Publish Assessment
-                        </Button>
+                        <>
+                            <Button onClick={handleDownloadPDF} variant="outline" className="gap-2">
+                                <FileDown className="h-4 w-4" />
+                                Download PDF
+                            </Button>
+                            <Button onClick={() => handleSaveDraftAndDownload()} disabled={isSaving} variant="outline" className="gap-2">
+                                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                                Save Draft & Download
+                            </Button>
+                            <Button onClick={() => handleSave('published')} disabled={isSaving} className="btn-gradient gap-2">
+                                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                                Publish
+                            </Button>
+                        </>
                     )}
                 </div>
             </div>

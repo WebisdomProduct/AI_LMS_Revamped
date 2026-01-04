@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { dbService } from '@/services/db';
-import { Assessment, Question } from '@/types/assessments';
+import { Assessment, AssessmentWithStats, Question } from '@/types/assessments';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
 export const useAssessments = () => {
-  const [assessments, setAssessments] = useState<Assessment[]>([]);
+  const [assessments, setAssessments] = useState<AssessmentWithStats[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
@@ -21,7 +21,7 @@ export const useAssessments = () => {
 
       if (error) throw error;
 
-      setAssessments(data as unknown as Assessment[] || []);
+      setAssessments(data as unknown as AssessmentWithStats[] || []);
     } catch (err) {
       console.error('Error fetching assessments:', err);
       setError('Failed to load assessments');
@@ -41,7 +41,7 @@ export const useAssessments = () => {
     return assessment;
   };
 
-  const updateAssessment = async (id: string, updates: Partial<Assessment>) => {
+  const updateAssessment = async (id: string, updates: Partial<AssessmentWithStats>) => {
     try {
       const res = await fetch(`/api/assessments/${id}`, {
         method: 'PUT',

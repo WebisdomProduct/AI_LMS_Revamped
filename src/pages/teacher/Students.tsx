@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Search, Loader2, Mail, MessageSquare, BarChart3, X, FileText, Download } from 'lucide-react';
+import { Plus, Search, Loader2, Mail, MessageSquare, BarChart3, X, FileText, Download, Upload } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { dbService } from '@/services/db';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -12,6 +12,8 @@ import { useToast } from '@/hooks/use-toast';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import jsPDF from 'jspdf';
 import { SubjectPerformanceGauges, GradeDistributionChart, SubjectYearPerformanceChart } from '@/components/analytics/StudentAnalyticsCharts';
+import Papa from 'papaparse';
+
 
 interface Student {
     id: string;
@@ -30,6 +32,17 @@ const Students: React.FC = () => {
     const [remarksText, setRemarksText] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const { toast } = useToast();
+
+    // Add Student state
+    const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+    const [newStudent, setNewStudent] = useState({ name: '', email: '', grade: '', class: '' });
+
+    // Import Students state
+    const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+    const [importFile, setImportFile] = useState<File | null>(null);
+    const [importPreview, setImportPreview] = useState<any[]>([]);
+    const [isImporting, setIsImporting] = useState(false);
+
 
     const fetchStudents = async () => {
         setIsLoading(true);
@@ -156,6 +169,118 @@ const Students: React.FC = () => {
         }
     };
 
+    // Add Student Handler
+    const handleAddStudent = async () => {
+        if (!newStudent.name || !newStudent.email || !newStudent.grade || !newStudent.class) {
+            toast({ title: 'Missing Fields', description: 'Please fill all required fields.', variant: 'destructive' });
+            return;
+        }
+
+        setIsSaving(true);
+        try {
+            const { data, error } = await dbService.createStudent(newStudent);
+            if (error) throw new Error(error);
+
+            toast({ title: 'Student Added', description: `${newStudent.name} has been added successfully.` });
+            setIsAddDialogOpen(false);
+            setNewStudent({ name: '', email: '', grade: '', class: '' });
+            fetchStudents();
+        } catch (error: any) {
+            toast({ title: 'Error', description: error.message || 'Failed to add student.', variant: 'destructive' });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    // Import Students Handler
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setImportFile(file);
+
+        // Parse CSV/Excel file
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: (results) => {
+                // Map CSV columns to expected format
+                const parsedData = results.data.map((row: any) => ({
+                    name: row.name || row.Name || '',
+                    email: row.email || row.Email || '',
+                    grade: row.grade || row.Grade || '',
+                    class: row.class || row.Class || ''
+                }));
+                setImportPreview(parsedData);
+            },
+            error: (error) => {
+                toast({ title: 'Parse Error', description: error.message, variant: 'destructive' });
+            }
+        });
+    };
+
+    const handleImportStudents = async () => {
+        if (importPreview.length === 0) {
+            toast({ title: 'No Data', description: 'Please upload a valid CSV file.', variant: 'destructive' });
+            return;
+        }
+
+        setIsImporting(true);
+        try {
+            const { data, errors, error } = await dbService.createStudentsBulk(importPreview);
+
+            if (error) throw new Error(error);
+
+            const successCount = data.length;
+            const errorCount = errors.length;
+
+            toast({
+                title: 'Import Complete',
+                description: `Successfully imported ${successCount} students${errorCount > 0 ? `, ${errorCount} failed` : ''}.`
+            });
+
+            setIsImportDialogOpen(false);
+            setImportFile(null);
+            setImportPreview([]);
+            fetchStudents();
+        } catch (error: any) {
+            toast({ title: 'Import Failed', description: error.message, variant: 'destructive' });
+        } finally {
+            setIsImporting(false);
+        }
+    };
+
+    // Export Students Handler
+    const handleExportStudents = () => {
+        if (students.length === 0) {
+            toast({ title: 'No Data', description: 'No students to export.', variant: 'destructive' });
+            return;
+        }
+
+        // Convert students to CSV format
+        const csv = Papa.unparse(students.map(s => ({
+            Name: s.name,
+            Email: s.email,
+            Grade: s.grade,
+            Class: s.class,
+            Remarks: s.remarks || ''
+        })));
+
+        // Create download link
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `students_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        toast({ title: 'Export Complete', description: 'Students data has been exported to CSV.' });
+    };
+
+
     if (isLoading) {
         return <div className="flex justify-center p-10"><Loader2 className="animate-spin h-10 w-10 text-primary" /></div>;
     }
@@ -167,9 +292,17 @@ const Students: React.FC = () => {
                     <h1 className="text-3xl font-bold">Students</h1>
                     <p className="text-muted-foreground mt-1">Manage your class roster and view individual progress</p>
                 </div>
-                <Button className="btn-gradient gap-2">
-                    <Plus className="h-4 w-4" /> Add Student
-                </Button>
+                <div className="flex gap-2">
+                    <Button variant="outline" className="gap-2" onClick={handleExportStudents}>
+                        <Download className="h-4 w-4" /> Export CSV
+                    </Button>
+                    <Button variant="outline" className="gap-2" onClick={() => setIsImportDialogOpen(true)}>
+                        <Upload className="h-4 w-4" /> Import Students
+                    </Button>
+                    <Button className="btn-gradient gap-2" onClick={() => setIsAddDialogOpen(true)}>
+                        <Plus className="h-4 w-4" /> Add Student
+                    </Button>
+                </div>
             </div>
 
             <Tabs defaultValue="list" className="w-full">
@@ -403,6 +536,115 @@ const Students: React.FC = () => {
                         <Button onClick={handleSaveRemarks} disabled={isSaving}>
                             {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                             Save Remarks
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Add Student Dialog */}
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Add New Student</DialogTitle>
+                        <DialogDescription>Enter student details to add them to your class</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div>
+                            <Label>Name *</Label>
+                            <Input
+                                value={newStudent.name}
+                                onChange={(e) => setNewStudent({ ...newStudent, name: e.target.value })}
+                                placeholder="Student name"
+                            />
+                        </div>
+                        <div>
+                            <Label>Email *</Label>
+                            <Input
+                                type="email"
+                                value={newStudent.email}
+                                onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })}
+                                placeholder="student@example.com"
+                            />
+                        </div>
+                        <div>
+                            <Label>Grade *</Label>
+                            <Input
+                                value={newStudent.grade}
+                                onChange={(e) => setNewStudent({ ...newStudent, grade: e.target.value })}
+                                placeholder="e.g., 10th, Sophomore"
+                            />
+                        </div>
+                        <div>
+                            <Label>Class *</Label>
+                            <Input
+                                value={newStudent.class}
+                                onChange={(e) => setNewStudent({ ...newStudent, class: e.target.value })}
+                                placeholder="e.g., A, B, Science"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
+                        <Button onClick={handleAddStudent} disabled={isSaving} className="btn-gradient">
+                            {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+                            Add Student
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Import Students Dialog */}
+            <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+                <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>Import Students from CSV</DialogTitle>
+                        <DialogDescription>
+                            Upload a CSV file with columns: name, email, grade, class
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div>
+                            <Label>CSV File</Label>
+                            <Input
+                                type="file"
+                                accept=".csv,.xlsx,.xls"
+                                onChange={handleFileUpload}
+                                className="cursor-pointer"
+                            />
+                            <p className="text-xs text-muted-foreground mt-2">
+                                Expected format: name, email, grade, class (header row required)
+                            </p>
+                        </div>
+
+                        {importPreview.length > 0 && (
+                            <div className="border rounded-lg p-4 max-h-64 overflow-y-auto">
+                                <h4 className="font-semibold mb-2">Preview ({importPreview.length} students)</h4>
+                                <div className="space-y-2">
+                                    {importPreview.slice(0, 5).map((student, index) => (
+                                        <div key={index} className="text-sm border-b pb-2">
+                                            <span className="font-medium">{student.name}</span> - {student.email} - Grade: {student.grade} - Class: {student.class}
+                                        </div>
+                                    ))}
+                                    {importPreview.length > 5 && (
+                                        <p className="text-xs text-muted-foreground">...and {importPreview.length - 5} more</p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => {
+                            setIsImportDialogOpen(false);
+                            setImportFile(null);
+                            setImportPreview([]);
+                        }}>Cancel</Button>
+                        <Button
+                            onClick={handleImportStudents}
+                            disabled={isImporting || importPreview.length === 0}
+                            className="btn-gradient"
+                        >
+                            {isImporting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                            Import {importPreview.length} Students
                         </Button>
                     </DialogFooter>
                 </DialogContent>

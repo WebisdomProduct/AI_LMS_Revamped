@@ -40,6 +40,15 @@ import StudyPlan from "./pages/student/StudyPlan";
 import Challenges from "./pages/student/Challenges";
 import StudentSchedule from "./pages/student/StudentSchedule";
 
+// Admin Pages
+import AdminLayout from "./pages/admin/AdminLayout";
+import AdminDashboard from "./pages/admin/Dashboard";
+import TeachersAdmin from "./pages/admin/Teachers";
+import StudentsAdmin from "./pages/admin/Students";
+import LessonsAdmin from "./pages/admin/Lessons";
+import AssessmentsAdmin from "./pages/admin/Assessments";
+import AnalyticsAdmin from "./pages/admin/Analytics";
+
 const queryClient = new QueryClient();
 
 // Protected Route wrapper
@@ -118,7 +127,7 @@ const AppRoutes = () => {
         <Route path="profile" element={<TeacherProfile />} />
       </Route>
 
-      {/* Placeholder routes for Student and Admin */}
+      {/* Student Routes */}
       <Route
         path="/student"
         element={
@@ -138,19 +147,22 @@ const AppRoutes = () => {
         <Route path="schedule" element={<StudentSchedule />} />
       </Route>
 
+      {/* Admin Routes */}
       <Route
         path="/admin"
         element={
           <ProtectedRoute allowedRoles={["admin"]}>
-            <div className="min-h-screen flex items-center justify-center bg-background">
-              <div className="text-center">
-                <h1 className="text-3xl font-bold mb-4">Admin Dashboard</h1>
-                <p className="text-muted-foreground">Coming soon...</p>
-              </div>
-            </div>
+            <AdminLayout />
           </ProtectedRoute>
         }
-      />
+      >
+        <Route index element={<AdminDashboard />} />
+        <Route path="teachers" element={<TeachersAdmin />} />
+        <Route path="students" element={<StudentsAdmin />} />
+        <Route path="lessons" element={<LessonsAdmin />} />
+        <Route path="assessments" element={<AssessmentsAdmin />} />
+        <Route path="analytics" element={<AnalyticsAdmin />} />
+      </Route>
 
       {/* 404 */}
       <Route path="*" element={<NotFound />} />

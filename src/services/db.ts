@@ -74,6 +74,37 @@ class ApiService {
         }
     }
 
+    async createStudent(studentData: { name: string; email: string; grade: string; class: string }): Promise<{ data: Student | null, error: any }> {
+        try {
+            const res = await fetch(`${API_URL}/students`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(studentData)
+            });
+            if (!res.ok) throw new Error('Failed to create student');
+            const json = await res.json();
+            return { data: json.data, error: null };
+        } catch (error: any) {
+            return { data: null, error: error.message };
+        }
+    }
+
+    async createStudentsBulk(students: Array<{ name: string; email: string; grade: string; class: string }>): Promise<{ data: Student[], errors: any[], error: any }> {
+        try {
+            const res = await fetch(`${API_URL}/students/bulk`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ students })
+            });
+            if (!res.ok) throw new Error('Failed to import students');
+            const json = await res.json();
+            return { data: json.data || [], errors: json.errors || [], error: null };
+        } catch (error: any) {
+            return { data: [], errors: [], error: error.message };
+        }
+    }
+
+
     // --- Teachers ---
     async getTeachers(): Promise<{ data: any[], error: any }> {
         try {

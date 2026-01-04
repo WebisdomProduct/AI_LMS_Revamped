@@ -365,9 +365,20 @@ app.post('/api/ai/create-goal', async (req, res) => {
 // --- Login Endpoint ---
 app.post('/api/login', (req, res) => {
     const { email, password } = req.body;
-    db.get("SELECT * FROM users WHERE email = ? AND password = ?", [email, password], (err, row) => {
+
+    // Hash the password for comparison
+    const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
+
+    db.get("SELECT * FROM users WHERE email = ?", [email], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!row) return res.status(401).json({ error: 'Invalid credentials' });
+
+        // Check if password matches (support both hashed and plain text for backward compatibility)
+        const passwordMatch = row.password === hashedPassword || row.password === password;
+
+        if (!passwordMatch) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
 
         // Return user info explicitly
         res.json({
@@ -459,16 +470,120 @@ app.get('/api/students/:id', (req, res) => {
 });
 
 app.put('/api/students/:id', (req, res) => {
-    const { name, email, grade, class: className } = req.body;
+    const { name, email, grade, class: className, remarks } = req.body;
     db.run(
-        `UPDATE students SET name = ?, email = ?, grade = ?, class = ? WHERE id = ?`,
-        [name, email, grade, className, req.params.id],
+        `UPDATE students SET name = ?, email = ?, grade = ?, class = ?, remarks = ? WHERE id = ?`,
+        [name, email, grade, className, remarks, req.params.id],
         function (err) {
             if (err) return res.status(500).json({ error: err.message });
             // Also update user email if needed
             res.json({ data: { id: req.params.id, ...req.body } });
         }
     );
+});
+
+// Create single student
+app.post('/api/students', (req, res) => {
+    const { name, email, grade, class: className } = req.body;
+
+    if (!name || !email || !grade || !className) {
+        return res.status(400).json({ error: 'Missing required fields: name, email, grade, class' });
+    }
+
+    const id = crypto.randomUUID();
+    const userId = crypto.randomUUID();
+    const created_at = new Date().toISOString();
+
+    db.serialize(() => {
+        // Create user account for student
+        db.run(
+            `INSERT INTO users (id, email, password, full_name, role, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+            [userId, email, 'student123', name, 'student', created_at],
+            (err) => {
+                if (err) {
+                    console.error('Error creating user:', err);
+                    return res.status(500).json({ error: 'Failed to create user account' });
+                }
+
+                // Create student record
+                db.run(
+                    `INSERT INTO students (id, user_id, name, email, grade, class, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [id, userId, name, email, grade, className, created_at],
+                    (err) => {
+                        if (err) {
+                            console.error('Error creating student:', err);
+                            return res.status(500).json({ error: err.message });
+                        }
+                        res.json({
+                            data: { id, user_id: userId, name, email, grade, class: className, created_at },
+                            message: 'Student created successfully'
+                        });
+                    }
+                );
+            }
+        );
+    });
+});
+
+// Bulk import students
+app.post('/api/students/bulk', (req, res) => {
+    const { students } = req.body;
+
+    if (!students || !Array.isArray(students) || students.length === 0) {
+        return res.status(400).json({ error: 'Invalid students array' });
+    }
+
+    const created_at = new Date().toISOString();
+    const createdStudents = [];
+    const errors = [];
+
+    db.serialize(() => {
+        students.forEach((student, index) => {
+            const { name, email, grade, class: className } = student;
+
+            if (!name || !email || !grade || !className) {
+                errors.push({ index, error: 'Missing required fields', student });
+                return;
+            }
+
+            const id = crypto.randomUUID();
+            const userId = crypto.randomUUID();
+
+            // Create user account
+            db.run(
+                `INSERT INTO users (id, email, password, full_name, role, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+                [userId, email, 'student123', name, 'student', created_at],
+                (err) => {
+                    if (err) {
+                        errors.push({ index, error: 'Failed to create user', student, details: err.message });
+                        return;
+                    }
+
+                    // Create student record
+                    db.run(
+                        `INSERT INTO students (id, user_id, name, email, grade, class, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                        [id, userId, name, email, grade, className, created_at],
+                        (err) => {
+                            if (err) {
+                                errors.push({ index, error: 'Failed to create student', student, details: err.message });
+                            } else {
+                                createdStudents.push({ id, user_id: userId, name, email, grade, class: className });
+                            }
+                        }
+                    );
+                }
+            );
+        });
+
+        // Wait a bit for all operations to complete
+        setTimeout(() => {
+            res.json({
+                data: createdStudents,
+                errors: errors.length > 0 ? errors : null,
+                message: `Successfully created ${createdStudents.length} students${errors.length > 0 ? `, ${errors.length} failed` : ''}`
+            });
+        }, 500);
+    });
 });
 
 // --- Lessons ---
@@ -1121,19 +1236,348 @@ app.post('/api/export/google-doc', async (req, res) => {
 });
 
 
-// --- Start Server ---
-if (require.main === module) {
-    app.listen(port, () => {
-        console.log(`Server running at http://localhost:${port}`);
-    });
-}
+// ==================== ADMIN PANEL API ENDPOINTS ====================
 
-module.exports = app;
+// Admin Authentication Middleware
+const isAdmin = (req, res, next) => {
+    // In a real app, check JWT token or session
+    // For now, we'll trust the frontend sends admin requests only when logged in as admin
+    next()
+};
+
+// --- ADMIN: Teachers Management ---
+
+// Get all teachers
+app.get('/api/admin/teachers', isAdmin, (req, res) => {
+    db.all(`
+        SELECT u.id, u.email, u.full_name, u.role,
+               COUNT(DISTINCT l.id) as lessons_count,
+               COUNT(DISTINCT a.id) as assessments_count
+        FROM users u
+        LEFT JOIN lessons l ON u.id = l.teacher_id
+        LEFT JOIN assessments a ON u.id = a.teacher_id
+        WHERE u.role = 'teacher'
+        GROUP BY u.id
+    `, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ data: rows });
+    });
+});
+
+// Create teacher
+app.post('/api/admin/teachers', isAdmin, (req, res) => {
+    const { email, full_name, password } = req.body;
+    const teacherId = crypto.randomUUID();
+    const hashedPassword = crypto.createHash('sha256').update(password || 'teacher123').digest('hex');
+
+    db.run(`INSERT INTO users (id, email, password, full_name, role) VALUES (?, ?, ?, ?, ?)`,
+        [teacherId, email, hashedPassword, full_name, 'teacher'],
+        function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ data: { id: teacherId, email, full_name, role: 'teacher' } });
+        }
+    );
+});
+
+// Bulk import teachers
+app.post('/api/admin/teachers/bulk', isAdmin, (req, res) => {
+    const { teachers } = req.body;
+    const results = { success: [], errors: [] };
+
+    db.serialize(() => {
+        teachers.forEach((teacher, index) => {
+            const teacherId = crypto.randomUUID();
+            const hashedPassword = crypto.createHash('sha256').update(teacher.password || 'teacher123').digest('hex');
+
+            db.run(`INSERT INTO users (id, email, password, full_name, role) VALUES (?, ?, ?, ?, ?)`,
+                [teacherId, teacher.email, hashedPassword, teacher.full_name, 'teacher'],
+                function (err) {
+                    if (err) {
+                        results.errors.push({ index, email: teacher.email, error: err.message });
+                    } else {
+                        results.success.push({ id: teacherId, email: teacher.email });
+                    }
+                }
+            );
+        });
+    });
+
+    setTimeout(() => res.json(results), 500);
+});
+
+// Update teacher
+app.put('/api/admin/teachers/:id', isAdmin, (req, res) => {
+    const { email, full_name } = req.body;
+    db.run(`UPDATE users SET email = ?, full_name = ? WHERE id = ? AND role = 'teacher'`,
+        [email, full_name, req.params.id],
+        function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ data: { id: req.params.id, email, full_name } });
+        }
+    );
+});
+
+// Delete teacher
+app.delete('/api/admin/teachers/:id', isAdmin, (req, res) => {
+    db.run(`DELETE FROM users WHERE id = ? AND role = 'teacher'`, [req.params.id], function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+    });
+});
+
+// --- ADMIN: Students Management ---
+
+// Get all students with stats
+app.get('/api/admin/students', isAdmin, (req, res) => {
+    db.all(`
+        SELECT s.id, s.name, s.email, s.grade, s.class,
+               AVG(g.percentage) as average_grade,
+               COUNT(DISTINCT sub.id) as submissions_count
+        FROM students s
+        LEFT JOIN grades g ON s.id = g.student_id
+        LEFT JOIN submissions sub ON s.id = sub.student_id
+        GROUP BY s.id
+    `, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ data: rows });
+    });
+});
+
+// Update student (admin)
+app.put('/api/admin/students/:id', isAdmin, (req, res) => {
+    const { name, email, grade, class: className } = req.body;
+    db.run(`UPDATE students SET name = ?, email = ?, grade = ?, class = ? WHERE id = ?`,
+        [name, email, grade, className, req.params.id],
+        function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ data: { id: req.params.id, name, email, grade, class: className } });
+        }
+    );
+});
+
+// Delete student
+app.delete('/api/admin/students/:id', isAdmin, (req, res) => {
+    db.serialize(() => {
+        // Delete related data first
+        db.run(`DELETE FROM grades WHERE student_id = ?`, [req.params.id]);
+        db.run(`DELETE FROM submissions WHERE student_id = ?`, [req.params.id]);
+        db.run(`DELETE FROM chat_logs WHERE student_id = ?`, [req.params.id]);
+
+        // Delete student
+        db.run(`DELETE FROM students WHERE id = ?`, [req.params.id], function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+
+            // Delete user account
+            db.run(`DELETE FROM users WHERE id = (SELECT user_id FROM students WHERE id = ?)`, [req.params.id]);
+            res.json({ success: true });
+        });
+    });
+});
+
+// --- ADMIN: Lessons Management ---
+
+// Get all lessons with teacher info
+app.get('/api/admin/lessons', isAdmin, (req, res) => {
+    db.all(`
+        SELECT l.*, u.full_name as teacher_name, u.email as teacher_email
+        FROM lessons l
+        LEFT JOIN users u ON l.teacher_id = u.id
+        ORDER BY l.created_at DESC
+    `, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ data: rows });
+    });
+});
+
+// Update lesson status
+app.put('/api/admin/lessons/:id', isAdmin, (req, res) => {
+    const { status } = req.body;
+    db.run(`UPDATE lessons SET status = ?, updated_at = ? WHERE id = ?`,
+        [status, new Date().toISOString(), req.params.id],
+        function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ data: { id: req.params.id, status } });
+        }
+    );
+});
+
+// Delete lesson
+app.delete('/api/admin/lessons/:id', isAdmin, (req, res) => {
+    db.run(`DELETE FROM lessons WHERE id = ?`, [req.params.id], function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+    });
+});
+
+// --- ADMIN: Assessments Management ---
+
+// Get all assessments with stats
+app.get('/api/admin/assessments', isAdmin, (req, res) => {
+    db.all(`
+        SELECT a.*, u.full_name as teacher_name, u.email as teacher_email,
+               COUNT(DISTINCT q.id) as questions_count,
+               COUNT(DISTINCT g.id) as submissions_count,
+               AVG(g.percentage) as average_score
+        FROM assessments a
+        LEFT JOIN users u ON a.teacher_id = u.id
+        LEFT JOIN questions q ON a.id = q.assessment_id
+        LEFT JOIN grades g ON a.id = g.assessment_id
+        GROUP BY a.id
+        ORDER BY a.created_at DESC
+    `, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ data: rows });
+    });
+});
+
+// Get grades for specific assessment
+app.get('/api/admin/assessments/:id/grades', isAdmin, (req, res) => {
+    db.all(`
+        SELECT g.*, s.name as student_name, s.email as student_email
+        FROM grades g
+        LEFT JOIN students s ON g.student_id = s.id
+        WHERE g.assessment_id = ?
+        ORDER BY g.percentage DESC
+    `, [req.params.id], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ data: rows });
+    });
+});
+
+// Delete assessment
+app.delete('/api/admin/assessments/:id', isAdmin, (req, res) => {
+    db.serialize(() => {
+        // Delete related data
+        db.run(`DELETE FROM questions WHERE assessment_id = ?`, [req.params.id]);
+        db.run(`DELETE FROM grades WHERE assessment_id = ?`, [req.params.id]);
+        db.run(`DELETE FROM submissions WHERE assessment_id = ?`, [req.params.id]);
+        db.run(`DELETE FROM rubrics WHERE assessment_id = ?`, [req.params.id]);
+
+        // Delete assessment
+        db.run(`DELETE FROM assessments WHERE id = ?`, [req.params.id], function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true });
+        });
+    });
+});
+
+// --- ADMIN: Analytics ---
+
+// School overview analytics
+app.get('/api/admin/analytics/overview', isAdmin, (req, res) => {
+    const stats = {};
+
+    db.serialize(() => {
+        // Total counts
+        db.get(`SELECT COUNT(*) as count FROM users WHERE role = 'teacher'`, (err, row) => {
+            stats.total_teachers = row?.count || 0;
+        });
+
+        db.get(`SELECT COUNT(*) as count FROM students`, (err, row) => {
+            stats.total_students = row?.count || 0;
+        });
+
+        db.get(`SELECT COUNT(*) as count FROM lessons`, (err, row) => {
+            stats.total_lessons = row?.count || 0;
+        });
+
+        db.get(`SELECT COUNT(*) as count FROM assessments WHERE status = 'published'`, (err, row) => {
+            stats.total_assessments = row?.count || 0;
+        });
+
+        // Average performance
+        db.get(`SELECT AVG(percentage) as avg FROM grades`, (err, row) => {
+            stats.average_performance = row?.avg || 0;
+
+            // Send response after all queries
+            setTimeout(() => res.json({ data: stats }), 200);
+        });
+    });
+});
+
+// Teacher performance analytics
+app.get('/api/admin/analytics/teachers', isAdmin, (req, res) => {
+    db.all(`
+        SELECT u.id, u.full_name, u.email,
+               COUNT(DISTINCT l.id) as lessons_created,
+               COUNT(DISTINCT a.id) as assessments_published,
+               AVG(g.percentage) as average_student_performance
+        FROM users u
+        LEFT JOIN lessons l ON u.id = l.teacher_id
+        LEFT JOIN assessments a ON u.id = a.teacher_id AND a.status = 'published'
+        LEFT JOIN grades g ON a.id = g.assessment_id
+        WHERE u.role = 'teacher'
+        GROUP BY u.id
+        ORDER BY lessons_created DESC
+    `, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ data: rows });
+    });
+});
+
+// Student performance analytics
+app.get('/api/admin/analytics/students', isAdmin, (req, res) => {
+    db.all(`
+        SELECT s.id, s.name, s.email, s.grade, s.class,
+               COUNT(DISTINCT sub.id) as total_submissions,
+               AVG(g.percentage) as average_grade,
+               COUNT(DISTINCT g.id) as graded_assessments
+        FROM students s
+        LEFT JOIN submissions sub ON s.id = sub.student_id
+        LEFT JOIN grades g ON s.id = g.student_id
+        GROUP BY s.id
+        ORDER BY average_grade DESC
+    `, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ data: rows });
+    });
+});
+
+// Subject-wise analytics
+app.get('/api/admin/analytics/subjects', isAdmin, (req, res) => {
+    db.all(`
+        SELECT a.subject,
+               COUNT(DISTINCT a.id) as assessments_count,
+               AVG(g.percentage) as average_performance,
+               COUNT(DISTINCT g.student_id) as students_count
+        FROM assessments a
+        LEFT JOIN grades g ON a.id = g.assessment_id
+        WHERE a.status = 'published'
+        GROUP BY a.subject
+        ORDER BY assessments_count DESC
+    `, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ data: rows });
+    });
+});
+
+// Grade-wise analytics
+app.get('/api/admin/analytics/grades', isAdmin, (req, res) => {
+    db.all(`
+        SELECT s.grade,
+               COUNT(DISTINCT s.id) as students_count,
+               AVG(g.percentage) as average_performance,
+               COUNT(DISTINCT sub.id) as total_submissions
+        FROM students s
+        LEFT JOIN grades g ON s.id = g.student_id
+        LEFT JOIN submissions sub ON s.id = sub.student_id
+        GROUP BY s.grade
+        ORDER BY s.grade
+    `, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ data: rows });
+    });
+});
+
+// ==================== END ADMIN PANEL API ====================
+
+// 404 handler - MUST be last
 app.use((req, res) => {
     console.log(`[404] Route not found: ${req.method} ${req.url}`);
     res.status(404).json({ error: 'Not Found', path: req.url });
 });
 
+// --- Start Server ---
 const server = app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
 });
@@ -1146,3 +1590,5 @@ server.on('close', () => {
 setInterval(() => {
     // Prevent process exit
 }, 1000 * 60 * 60);
+
+module.exports = app;

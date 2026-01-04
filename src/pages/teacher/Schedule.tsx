@@ -328,13 +328,37 @@ const Schedule: React.FC = () => {
                                 Calendar
                             </CardTitle>
                         </CardHeader>
-                        <CardContent>
-                            <Calendar
-                                mode="single"
-                                selected={date}
-                                onSelect={setDate}
-                                className="rounded-md border mx-auto"
-                            />
+                        <CardContent className="p-3 md:p-4">
+                            <div className="w-full max-w-[300px] mx-auto">
+                                <Calendar
+                                    mode="single"
+                                    selected={date}
+                                    onSelect={setDate}
+                                    className="rounded-md border w-full"
+                                    classNames={{
+                                        months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
+                                        month: "space-y-3 w-full",
+                                        caption: "flex justify-center pt-1 relative items-center mb-2",
+                                        caption_label: "text-sm font-medium",
+                                        nav: "space-x-1 flex items-center",
+                                        nav_button: "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100",
+                                        nav_button_previous: "absolute left-1",
+                                        nav_button_next: "absolute right-1",
+                                        table: "w-full border-collapse",
+                                        head_row: "flex w-full mb-1",
+                                        head_cell: "text-muted-foreground rounded-md flex-1 font-normal text-xs text-center",
+                                        row: "flex w-full mt-1",
+                                        cell: "text-center text-sm p-0 relative flex-1 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
+                                        day: "h-8 w-full p-0 font-normal text-xs md:text-sm lg:text-sm aria-selected:opacity-100 hover:bg-accent hover:text-accent-foreground rounded-md flex items-center justify-center",
+                                        day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+                                        day_today: "bg-accent text-accent-foreground",
+                                        day_outside: "text-muted-foreground opacity-50",
+                                        day_disabled: "text-muted-foreground opacity-50",
+                                        day_range_middle: "aria-selected:bg-accent aria-selected:text-accent-foreground",
+                                        day_hidden: "invisible",
+                                    }}
+                                />
+                            </div>
                         </CardContent>
                     </Card>
 
